@@ -100,7 +100,7 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
     streamable_pipeline = StreamableSearchPipeline(web_researcher, synthesizer)
     model_registry = ModelRegistry()
     model_registry.register(
-        "search-agent",
+        settings.llm_model,
         orchestrator,
         description="Search agent with web research and synthesis",
         streamable_agent=streamable_pipeline,
