@@ -4,6 +4,24 @@ version = "0.1.0"
 description = "Production-ready Python AI agent framework"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+readme = "README.md"
+authors = [
+    {name = "Dedy Ariansyah", email = "dedy.ariansyah1@gmail.com"},
+]
+keywords = ["ai", "agent", "framework", "llm", "fastapi", "async"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
 dependencies = [
     "fastapi>=0.128.0",
     "uvicorn[standard]>=0.30.0",
@@ -29,6 +47,18 @@ dev = [
     "mypy>=1.13.0",
     "pre-commit>=4.0.0",
 ]
+local = [
+    "torch>=2.1.0",
+    "transformers>=4.45.0",
+    "accelerate>=0.34.0",
+    "bitsandbytes>=0.44.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/deduu/prometheus"
+Repository = "https://github.com/deduu/prometheus"
+Documentation = "https://github.com/deduu/prometheus/blob/main/docs/ARCHITECTURE.md"
+"Bug Tracker" = "https://github.com/deduu/prometheus/issues"
 
 [build-system]
 requires = ["setuptools>=75.0"]
@@ -90,6 +120,22 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "ddgs.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "transformers.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "torch.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "bitsandbytes.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "accelerate.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
