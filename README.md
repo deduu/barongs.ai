@@ -116,7 +116,10 @@ If you already have Open WebUI running or prefer to configure it yourself:
 2. **Open the Open WebUI admin panel** — go to **Settings > Connections**.
 
 3. **Add an OpenAI connection**:
-   - **API Base URL**: `http://localhost:8000/v1` (or `http://pormetheus:8000/v1` if both run in Docker)
+   - **API Base URL**:
+     - `http://host.docker.internal:8000/v1` — if Open WebUI runs in Docker and Pormetheus runs on the host
+     - `http://pormetheus:8000/v1` — if both run in the same Docker Compose stack
+     - `http://localhost:8000/v1` — if both run directly on the host (no Docker)
    - **API Key**: the value of `PROM_API_KEY` from your `.env` (default: `changeme`)
 
 4. **Verify**: Click the refresh button next to the URL field. You should see the model listed (e.g., `gpt-4o` or whatever you set `PROM_LLM_MODEL` to).
