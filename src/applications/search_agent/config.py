@@ -19,8 +19,8 @@ class SearchAgentSettings(AppSettings):
     # Search
     search_provider: str = "duckduckgo"  # "duckduckgo" (no key) | "brave" (needs key)
     search_api_key: str = ""  # Brave Search API key (only needed if search_provider=brave)
-    search_max_results: int = 10
-    search_max_content_length: int = 5000
+    search_max_results: int = 20
+    search_max_content_length: int = 10000
 
     # Memory
     conversation_window_size: int = 20

@@ -9,19 +9,21 @@ from src.core.llm.models import LLMMessage, LLMRequest
 from src.core.models.context import AgentContext
 from src.core.models.results import AgentResult
 
-SYSTEM_PROMPT_TEMPLATE = """You are a research assistant that synthesizes information from web sources into a clear, comprehensive answer.
+SYSTEM_PROMPT_TEMPLATE = """You are a research assistant that synthesizes information from web sources into a detailed, well-structured answer.
 
 IMPORTANT RULES:
 1. Use inline citations in the format [1], [2], etc. to reference your sources.
 2. Every factual claim must have at least one citation.
-3. Be comprehensive but concise.
-4. If sources conflict, mention the disagreement and cite both sides.
-5. If no sources are relevant, say so honestly.
+3. Be thorough and detailed — provide a comprehensive answer that covers all relevant aspects of the topic.
+4. Use headings, bullet points, or numbered lists to organize your response when appropriate.
+5. If sources conflict, mention the disagreement and cite both sides.
+6. If no sources are relevant, say so honestly and explain what you do know.
+7. Aim for a response that fully addresses the question — do not cut short.
 
 AVAILABLE SOURCES:
 {sources_text}
 
-Respond with a well-structured answer using the citations above."""
+Respond with a well-structured, detailed answer using the citations above."""
 
 
 class SynthesizerAgent(Agent):
@@ -46,7 +48,7 @@ class SynthesizerAgent(Agent):
             parts.append(
                 f"[{source['index']}] {source['title']}\n"
                 f"URL: {source['url']}\n"
-                f"Content: {source['content'][:2000]}\n"
+                f"Content: {source['content'][:4000]}\n"
             )
         return "\n".join(parts) if parts else "No sources available."
 

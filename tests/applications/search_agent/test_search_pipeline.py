@@ -8,10 +8,22 @@ from src.core.models.results import AgentResult
 
 
 class TestSearchPipelineAgent:
-    def _make_pipeline(self) -> SearchPipelineAgent:
-        # Mock QueryAnalyzer (kept in __init__ but no longer called)
+    def _make_pipeline(
+        self, *, query_type: str = "search"
+    ) -> SearchPipelineAgent:
+        # Mock QueryAnalyzer
         mock_analyzer = AsyncMock()
         mock_analyzer.name = "query_analyzer"
+        mock_analyzer.run = AsyncMock(
+            return_value=AgentResult(
+                agent_name="query_analyzer",
+                response="",
+                metadata={
+                    "query_type": query_type,
+                    "refined_queries": ["refined query 1", "refined query 2"],
+                },
+            )
+        )
 
         # Mock WebResearcher
         mock_researcher = AsyncMock()
@@ -55,9 +67,15 @@ class TestSearchPipelineAgent:
             )
         )
 
-        # Mock DirectAnswerer (kept in __init__ but no longer called)
+        # Mock DirectAnswerer
         mock_direct = AsyncMock()
         mock_direct.name = "direct_answerer"
+        mock_direct.run = AsyncMock(
+            return_value=AgentResult(
+                agent_name="direct_answerer",
+                response="Direct answer.",
+            )
+        )
 
         return SearchPipelineAgent(
             query_analyzer=mock_analyzer,
@@ -70,8 +88,8 @@ class TestSearchPipelineAgent:
         pipeline = self._make_pipeline()
         assert pipeline.name == "search_pipeline"
 
-    async def test_always_searches(self):
-        pipeline = self._make_pipeline()
+    async def test_search_path(self):
+        pipeline = self._make_pipeline(query_type="search")
         ctx = AgentContext(user_message="What is quantum computing?")
         result = await pipeline.run(ctx)
 
@@ -80,25 +98,37 @@ class TestSearchPipelineAgent:
         assert "sources" in result.metadata
         assert result.metadata["query_type"] == "search"
 
-    async def test_skips_query_analyzer(self):
+    async def test_calls_query_analyzer_then_researcher_then_synthesizer(self):
         pipeline = self._make_pipeline()
         ctx = AgentContext(user_message="test query")
         await pipeline.run(ctx)
 
-        # QueryAnalyzer and DirectAnswerer should NOT be called
-        pipeline._query_analyzer.run.assert_not_awaited()
-        pipeline._direct_answerer.run.assert_not_awaited()
-
-        # WebResearcher and Synthesizer should be called
+        pipeline._query_analyzer.run.assert_awaited_once()
         pipeline._web_researcher.run.assert_awaited_once()
         pipeline._synthesizer.run.assert_awaited_once()
+        pipeline._direct_answerer.run.assert_not_awaited()
 
-    async def test_passes_original_query_as_refined(self):
-        pipeline = self._make_pipeline()
-        ctx = AgentContext(user_message="What is Python?")
+    async def test_direct_answer_path(self):
+        pipeline = self._make_pipeline(query_type="direct")
+        ctx = AgentContext(user_message="Hello!")
         result = await pipeline.run(ctx)
 
-        assert result.metadata["refined_queries"] == ["What is Python?"]
+        assert result.response == "Direct answer."
+        assert result.metadata["query_type"] == "direct"
+        pipeline._direct_answerer.run.assert_awaited_once()
+        pipeline._web_researcher.run.assert_not_awaited()
+        pipeline._synthesizer.run.assert_not_awaited()
+
+    async def test_passes_refined_queries_to_researcher(self):
+        pipeline = self._make_pipeline()
+        ctx = AgentContext(user_message="What is Python?")
+        await pipeline.run(ctx)
+
+        researcher_ctx = pipeline._web_researcher.run.call_args[0][0]
+        assert researcher_ctx.metadata["refined_queries"] == [
+            "refined query 1",
+            "refined query 2",
+        ]
 
     async def test_metadata_contains_sources(self):
         pipeline = self._make_pipeline()

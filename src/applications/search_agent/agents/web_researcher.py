@@ -17,7 +17,7 @@ class WebResearcherAgent(Agent):
         search_tool: Tool,
         content_fetcher: Tool,
         url_validator: Tool,
-        max_sources: int = 5,
+        max_sources: int = 8,
     ) -> None:
         self._search_tool = search_tool
         self._content_fetcher = content_fetcher

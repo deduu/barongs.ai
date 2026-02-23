@@ -35,13 +35,30 @@ class SearchPipelineAgent(Agent):
         return "Full search pipeline: analyze → research → synthesize (or direct answer)."
 
     async def run(self, context: AgentContext) -> AgentResult:
-        # Always search with the original query (skip QueryAnalyzer LLM call
-        # to reduce latency — like Perplexity/Grok do).
+        # Step 1: Analyze and refine the query for better search results
+        analysis_result = await self._query_analyzer.run(context)
+        query_type: str = analysis_result.metadata.get("query_type", "search")
+        refined_queries: list[str] = analysis_result.metadata.get(
+            "refined_queries", [context.user_message]
+        )
+
+        # Direct answer path — no web search needed
+        if query_type == "direct":
+            direct_result = await self._direct_answerer.run(context)
+            return AgentResult(
+                agent_name=self.name,
+                response=direct_result.response,
+                metadata={"query_type": "direct", "refined_queries": refined_queries},
+                token_usage=direct_result.token_usage,
+            )
+
+        # Step 2: Search path — research with refined queries
         research_context = context.model_copy(
-            update={"metadata": {**context.metadata, "refined_queries": [context.user_message]}}
+            update={"metadata": {**context.metadata, "refined_queries": refined_queries}}
         )
         research_result = await self._web_researcher.run(research_context)
 
+        # Step 3: Synthesize from sources
         sources = research_result.metadata.get("sources", [])
         synth_context = context.model_copy(
             update={"metadata": {**context.metadata, "sources": sources}}
@@ -53,8 +70,8 @@ class SearchPipelineAgent(Agent):
             response=synth_result.response,
             metadata={
                 "sources": sources,
-                "query_type": "search",
-                "refined_queries": [context.user_message],
+                "query_type": query_type,
+                "refined_queries": refined_queries,
             },
             token_usage=synth_result.token_usage,
         )
