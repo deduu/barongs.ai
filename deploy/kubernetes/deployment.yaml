@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pormetheus
+  labels:
+    app: pormetheus
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pormetheus
+  template:
+    metadata:
+      labels:
+        app: pormetheus
+    spec:
+      containers:
+        - name: pormetheus
+          image: pormetheus:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: pormetheus-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

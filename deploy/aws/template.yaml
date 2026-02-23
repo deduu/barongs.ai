@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Pormetheus AI Agent Framework - Lambda Deployment
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.11
+
+Resources:
+  PormetheusFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src.applications.example_app.lambda_handler.handler
+      CodeUri: ../../
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+      Environment:
+        Variables:
+          PROM_ENVIRONMENT: production
+          PROM_LOG_LEVEL: INFO
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
