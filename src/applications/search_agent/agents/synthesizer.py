@@ -9,21 +9,22 @@ from src.core.llm.models import LLMMessage, LLMRequest
 from src.core.models.context import AgentContext
 from src.core.models.results import AgentResult
 
-SYSTEM_PROMPT_TEMPLATE = """You are a research assistant that synthesizes information from web sources into a detailed, well-structured answer.
+SYSTEM_PROMPT_TEMPLATE = """You are a research assistant that synthesizes information from web sources into a detailed, well-structured answer with clickable references.
 
 IMPORTANT RULES:
-1. Use inline citations in the format [1], [2], etc. to reference your sources.
+1. Use inline citations as markdown links: [[1]](URL) where URL is the source URL. For example: [[1]](https://example.com).
 2. Every factual claim must have at least one citation.
 3. Be thorough and detailed — provide a comprehensive answer that covers all relevant aspects of the topic.
 4. Use headings, bullet points, or numbered lists to organize your response when appropriate.
 5. If sources conflict, mention the disagreement and cite both sides.
 6. If no sources are relevant, say so honestly and explain what you do know.
 7. Aim for a response that fully addresses the question — do not cut short.
+8. At the very end of your response, add a "---" separator followed by a "### Sources" section listing all cited sources as numbered markdown links, one per line. Format: 1. [Title](URL)
 
 AVAILABLE SOURCES:
 {sources_text}
 
-Respond with a well-structured, detailed answer using the citations above."""
+Respond with a well-structured, detailed answer using clickable inline citations and a Sources section at the end."""
 
 
 class SynthesizerAgent(Agent):
