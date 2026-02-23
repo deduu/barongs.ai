@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from src.core.interfaces import Agent, Memory, Orchestrator, OrchestratorStrategy, Tool
+from src.core.llm import LLMMessage, LLMProvider, LLMProviderRegistry, LLMRequest, LLMResponse
+from src.core.mcp import MCPClient, MCPServerConfig, MCPToolAdapter, load_skills_md
 from src.core.models import (
     AgentContext,
     AgentResult,
@@ -28,6 +30,14 @@ __all__ = [
     "AgentResult",
     "AppSettings",
     "Conversation",
+    "LLMMessage",
+    "LLMProvider",
+    "LLMProviderRegistry",
+    "LLMRequest",
+    "LLMResponse",
+    "MCPClient",
+    "MCPServerConfig",
+    "MCPToolAdapter",
     "Memory",
     "Message",
     "Orchestrator",
@@ -42,4 +52,5 @@ __all__ = [
     "ToolInput",
     "ToolResult",
     "create_app",
+    "load_skills_md",
 ]
