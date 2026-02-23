@@ -68,8 +68,6 @@ The search agent exposes:
 
 ## Docker
 
-### Run with Docker Compose
-
 ```bash
 cp .env.example .env
 # Edit .env — set at minimum: PROM_LLM_API_KEY
@@ -77,35 +75,24 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The search agent will be available at `http://localhost:8000`.
-
-To run the example app instead, set `PROM_APP_MODULE` in your `.env`:
-
-```
-PROM_APP_MODULE=src.applications.example_app.main:app
-```
-
-### Run with Open WebUI (Full Stack)
-
-A pre-configured compose file starts the full stack — Pormetheus, [Open WebUI](https://github.com/open-webui/open-webui), PostgreSQL, and Redis — in one command:
-
-```bash
-cp .env.example .env
-# Edit .env — set at minimum: PROM_LLM_API_KEY
-
-docker compose -f docker-compose.openwebui.yml up --build
-```
+This starts the full stack in one command:
 
 | Service | URL | Purpose |
 |---------|-----|---------|
 | Open WebUI | `http://localhost:3000` | Chat interface |
 | Pormetheus API | `http://localhost:8000` | Search agent backend |
-| PostgreSQL | `localhost:5432` | Persistent storage (Open WebUI + Pormetheus) |
+| PostgreSQL | `localhost:5432` | Persistent storage |
 | Redis | `localhost:6379` | Caching layer |
 
 Open WebUI is pre-configured to connect to Pormetheus as its OpenAI-compatible backend. Once all containers are healthy, open `http://localhost:3000` and start chatting — queries go through the search agent pipeline (web research + synthesis with citations).
 
-You can customize the database credentials in your `.env`:
+To run the example app instead of the search agent, set in your `.env`:
+
+```
+PROM_APP_MODULE=src.applications.example_app.main:app
+```
+
+Database credentials are configurable in `.env`:
 
 ```
 POSTGRES_USER=pormetheus
