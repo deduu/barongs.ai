@@ -7,12 +7,14 @@ from collections.abc import AsyncGenerator
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from src.applications.example_app.config import ExampleAppSettings
 from src.applications.example_app.main import create_example_app
 
 
 @pytest_asyncio.fixture
 async def app_client() -> AsyncGenerator[AsyncClient, None]:
-    app = create_example_app()
+    settings = ExampleAppSettings(_env_file=None)
+    app = create_example_app(settings)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client

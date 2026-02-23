@@ -16,6 +16,8 @@ env/
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -43,9 +45,6 @@ coverage.xml
 # OS
 .DS_Store
 Thumbs.db
-
-# Docker
-.dockerignore
 
 # Distribution
 *.tar.gz

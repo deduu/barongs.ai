@@ -10,9 +10,9 @@ from src.core.orchestrator.strategies.single_agent import SingleAgentStrategy
 from src.core.server.factory import create_app
 
 
-def create_example_app() -> FastAPI:
+def create_example_app(settings: ExampleAppSettings | None = None) -> FastAPI:
     """Composition root: wire agents, tools, memory, orchestrator, and routes."""
-    settings = ExampleAppSettings()
+    settings = settings or ExampleAppSettings()
 
     # Create agents
     echo_agent = EchoAgent()
