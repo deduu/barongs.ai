@@ -66,6 +66,93 @@ The search agent exposes:
 | `POST /v1/chat/completions` | OpenAI-compatible API (works with Open WebUI) |
 | `GET /health` | Health check |
 
+## Docker
+
+### Run with Docker Compose
+
+```bash
+cp .env.example .env
+# Edit .env — set at minimum: PROM_LLM_API_KEY
+
+docker compose up --build
+```
+
+The search agent will be available at `http://localhost:8000`.
+
+To run the example app instead, set `PROM_APP_MODULE` in your `.env`:
+
+```
+PROM_APP_MODULE=src.applications.example_app.main:app
+```
+
+### Run with Open WebUI
+
+A pre-configured compose file starts both Pormetheus and [Open WebUI](https://github.com/open-webui/open-webui) together:
+
+```bash
+docker compose -f docker-compose.openwebui.yml up --build
+```
+
+| Service | URL |
+|---------|-----|
+| Pormetheus API | `http://localhost:8000` |
+| Open WebUI | `http://localhost:3000` |
+
+Open WebUI is pre-configured to connect to Pormetheus as its OpenAI-compatible backend. Once both containers are healthy, open `http://localhost:3000` in your browser and start chatting — queries go through the search agent pipeline (web research + synthesis with citations).
+
+### Setting up Open WebUI manually
+
+If you already have Open WebUI running or prefer to configure it yourself:
+
+1. **Start Pormetheus** (locally or via Docker):
+   ```bash
+   # Local
+   uvicorn src.applications.search_agent.main:app --host 0.0.0.0 --port 8000
+
+   # Or Docker
+   docker compose up --build
+   ```
+
+2. **Open the Open WebUI admin panel** — go to **Settings > Connections**.
+
+3. **Add an OpenAI connection**:
+   - **API Base URL**: `http://localhost:8000/v1` (or `http://pormetheus:8000/v1` if both run in Docker)
+   - **API Key**: the value of `PROM_API_KEY` from your `.env` (default: `changeme`)
+
+4. **Verify**: Click the refresh button next to the URL field. You should see the model listed (e.g., `gpt-4o` or whatever you set `PROM_LLM_MODEL` to).
+
+5. **Start chatting**: Select the model in the chat interface. Search queries will trigger web research; direct questions get answered immediately.
+
+> **Note**: If `PROM_OPENAI_AUTH_ENABLED` is `false` (default), the API key field in Open WebUI can be any non-empty string. Set it to `true` in your `.env` and use your actual `PROM_API_KEY` to require authentication.
+
+### OpenAI-Compatible API Reference
+
+The search agent exposes a standard OpenAI-compatible API at `/v1`:
+
+```bash
+# List available models
+curl http://localhost:8000/v1/models
+
+# Chat completion (non-streaming)
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "What is FastAPI?"}]
+  }'
+
+# Chat completion (streaming)
+curl -N -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "What is FastAPI?"}],
+    "stream": true
+  }'
+```
+
+The `model` field should match `PROM_LLM_MODEL` (default: `gpt-4o`). Check `GET /v1/models` to see what's registered.
+
 ## Architecture
 
 ```
