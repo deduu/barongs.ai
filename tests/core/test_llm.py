@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -258,3 +259,240 @@ class TestOpenAICompatibleProvider:
         provider = OpenAICompatibleProvider(base_url="http://localhost:8080/v1")
         # Should not raise — api_key defaults to "not-needed"
         assert provider.name == "openai_compatible"
+
+
+# --- HuggingFace Provider Tests ---
+
+# All HuggingFace tests mock torch + transformers at the module level so they
+# run without those heavy dependencies installed.
+
+_HF_MODULE = "src.core.llm.providers.huggingface"
+
+
+def _make_mock_torch() -> MagicMock:
+    """Create a mock torch module with tensor support for tests."""
+    mock_torch = MagicMock()
+
+    # Make torch.tensor return a real-ish object with .to(), .shape, slicing
+    class FakeTensor:
+        def __init__(self, data: list):
+            self._data = data
+            # Support 2-D tensors [[1,2,3]]
+            if isinstance(data[0], list):
+                self.shape = (len(data), len(data[0]))
+            else:
+                self.shape = (len(data),)
+
+        def to(self, device: Any) -> FakeTensor:
+            return self
+
+        def __getitem__(self, idx: Any) -> FakeTensor:
+            result = self._data[idx]
+            if isinstance(result, list):
+                return FakeTensor(result)
+            return result
+
+        def __len__(self) -> int:
+            return self.shape[-1] if len(self.shape) > 1 else self.shape[0]
+
+    def fake_tensor(data: Any) -> FakeTensor:
+        return FakeTensor(data)
+
+    mock_torch.tensor = fake_tensor
+    mock_torch.no_grad.return_value.__enter__ = MagicMock(return_value=None)
+    mock_torch.no_grad.return_value.__exit__ = MagicMock(return_value=False)
+    mock_torch.float16 = "float16"
+    mock_torch.bfloat16 = "bfloat16"
+    mock_torch.float32 = "float32"
+    mock_torch.device = MagicMock
+    return mock_torch
+
+
+class TestHuggingFaceProvider:
+    """Tests for the HuggingFace local LLM provider."""
+
+    def _make_request(self, system_prompt: str | None = None) -> LLMRequest:
+        return LLMRequest(
+            messages=[LLMMessage(role="user", content="What is AI?")],
+            model="Qwen/Qwen3-4B",
+            system_prompt=system_prompt,
+            temperature=0.7,
+            max_tokens=256,
+        )
+
+    @patch(f"{_HF_MODULE}.torch", new_callable=_make_mock_torch)
+    @patch(f"{_HF_MODULE}.AutoModelForCausalLM")
+    @patch(f"{_HF_MODULE}.AutoTokenizer")
+    def test_name(self, _mock_tok, _mock_model, _mock_torch):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
+
+        config = HuggingFaceConfig(quantization="none")
+        provider = HuggingFaceProvider(config=config)
+        assert provider.name == "huggingface"
+
+    @patch(f"{_HF_MODULE}.torch", new_callable=_make_mock_torch)
+    @patch(f"{_HF_MODULE}.AutoModelForCausalLM")
+    @patch(f"{_HF_MODULE}.AutoTokenizer")
+    def test_build_messages_without_system(self, _mock_tok, _mock_model, _mock_torch):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
+
+        config = HuggingFaceConfig(quantization="none")
+        provider = HuggingFaceProvider(config=config)
+        messages = provider._build_messages(self._make_request())
+        assert len(messages) == 1
+        assert messages[0] == {"role": "user", "content": "What is AI?"}
+
+    @patch(f"{_HF_MODULE}.torch", new_callable=_make_mock_torch)
+    @patch(f"{_HF_MODULE}.AutoModelForCausalLM")
+    @patch(f"{_HF_MODULE}.AutoTokenizer")
+    def test_build_messages_with_system(self, _mock_tok, _mock_model, _mock_torch):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
+
+        config = HuggingFaceConfig(quantization="none")
+        provider = HuggingFaceProvider(config=config)
+        messages = provider._build_messages(self._make_request(system_prompt="Be concise."))
+        assert len(messages) == 2
+        assert messages[0] == {"role": "system", "content": "Be concise."}
+        assert messages[1] == {"role": "user", "content": "What is AI?"}
+
+    @patch(f"{_HF_MODULE}.torch", new_callable=_make_mock_torch)
+    @patch(f"{_HF_MODULE}.AutoModelForCausalLM")
+    @patch(f"{_HF_MODULE}.AutoTokenizer")
+    async def test_generate_returns_llm_response(
+        self, mock_tok_cls, mock_model_cls, mock_torch
+    ):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
+
+        # Mock tokenizer
+        mock_tokenizer = MagicMock()
+        input_tensor = mock_torch.tensor([[1, 2, 3]])
+        mock_tokenizer.apply_chat_template.return_value = input_tensor
+        mock_tokenizer.decode.return_value = "AI is artificial intelligence."
+        mock_tok_cls.from_pretrained.return_value = mock_tokenizer
+
+        # Mock model — generate returns prompt + 3 new tokens
+        mock_model = MagicMock()
+        mock_model.device = "cpu"
+        mock_model.generate.return_value = mock_torch.tensor([[1, 2, 3, 4, 5, 6]])
+        mock_model_cls.from_pretrained.return_value = mock_model
+
+        config = HuggingFaceConfig(quantization="none")
+        provider = HuggingFaceProvider(config=config)
+        response = await provider.generate(self._make_request())
+
+        assert isinstance(response, LLMResponse)
+        assert response.content == "AI is artificial intelligence."
+        assert response.model == "Qwen/Qwen3-4B"
+        assert response.finish_reason == "stop"
+
+    @patch(f"{_HF_MODULE}.torch", new_callable=_make_mock_torch)
+    @patch(f"{_HF_MODULE}.AutoModelForCausalLM")
+    @patch(f"{_HF_MODULE}.AutoTokenizer")
+    async def test_generate_usage_stats(self, mock_tok_cls, mock_model_cls, mock_torch):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
+
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.apply_chat_template.return_value = mock_torch.tensor([[1, 2, 3]])
+        mock_tokenizer.decode.return_value = "response"
+        mock_tok_cls.from_pretrained.return_value = mock_tokenizer
+
+        mock_model = MagicMock()
+        mock_model.device = "cpu"
+        # 3 prompt tokens + 4 new tokens = 7 total
+        mock_model.generate.return_value = mock_torch.tensor([[1, 2, 3, 10, 11, 12, 13]])
+        mock_model_cls.from_pretrained.return_value = mock_model
+
+        config = HuggingFaceConfig(quantization="none")
+        provider = HuggingFaceProvider(config=config)
+        response = await provider.generate(self._make_request())
+
+        assert response.usage["prompt_tokens"] == 3
+        assert response.usage["completion_tokens"] == 4
+        assert response.usage["total_tokens"] == 7
+
+    @patch(f"{_HF_MODULE}.asyncio")
+    @patch(f"{_HF_MODULE}.torch", new_callable=_make_mock_torch)
+    @patch(f"{_HF_MODULE}.AutoModelForCausalLM")
+    @patch(f"{_HF_MODULE}.AutoTokenizer")
+    async def test_generate_uses_to_thread(
+        self, _mock_tok, _mock_model, _mock_torch, mock_asyncio
+    ):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
+
+        mock_response = LLMResponse(content="ok", model="test")
+        mock_asyncio.to_thread = AsyncMock(return_value=mock_response)
+
+        config = HuggingFaceConfig(quantization="none")
+        provider = HuggingFaceProvider(config=config)
+        await provider.generate(self._make_request())
+
+        mock_asyncio.to_thread.assert_awaited_once()
+
+    @patch(f"{_HF_MODULE}.TextIteratorStreamer")
+    @patch(f"{_HF_MODULE}.torch", new_callable=_make_mock_torch)
+    @patch(f"{_HF_MODULE}.AutoModelForCausalLM")
+    @patch(f"{_HF_MODULE}.AutoTokenizer")
+    async def test_stream_yields_tokens(
+        self, mock_tok_cls, mock_model_cls, mock_torch, mock_streamer_cls
+    ):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
+
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.apply_chat_template.return_value = mock_torch.tensor([[1, 2, 3]])
+        mock_tok_cls.from_pretrained.return_value = mock_tokenizer
+
+        mock_model = MagicMock()
+        mock_model.device = "cpu"
+        mock_model_cls.from_pretrained.return_value = mock_model
+
+        # Simulate TextIteratorStreamer as a simple iterator
+        mock_streamer = MagicMock()
+        mock_streamer.__iter__ = MagicMock(return_value=iter(["Hello", " world"]))
+        mock_streamer_cls.return_value = mock_streamer
+
+        config = HuggingFaceConfig(quantization="none")
+        provider = HuggingFaceProvider(config=config)
+        tokens = [token async for token in provider.stream(self._make_request())]
+
+        assert tokens == ["Hello", " world"]
+
+    def test_quantization_config_4bit(self):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig
+
+        config = HuggingFaceConfig(quantization="4bit")
+        assert config.quantization == "4bit"
+
+    def test_quantization_config_8bit(self):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig
+
+        config = HuggingFaceConfig(quantization="8bit")
+        assert config.quantization == "8bit"
+
+    def test_quantization_config_none(self):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig
+
+        config = HuggingFaceConfig(quantization="none")
+        assert config.quantization == "none"
+
+    @patch(f"{_HF_MODULE}.torch", new_callable=_make_mock_torch)
+    @patch(f"{_HF_MODULE}.AutoModelForCausalLM")
+    @patch(f"{_HF_MODULE}.AutoTokenizer")
+    def test_model_loaded_once(self, mock_tok_cls, mock_model_cls, _mock_torch):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
+
+        config = HuggingFaceConfig(quantization="none")
+        HuggingFaceProvider(config=config)
+
+        mock_model_cls.from_pretrained.assert_called_once()
+        mock_tok_cls.from_pretrained.assert_called_once()
+
+    def test_config_defaults(self):
+        from src.core.llm.providers.huggingface import HuggingFaceConfig
+
+        config = HuggingFaceConfig()
+        assert config.model_id == "Qwen/Qwen3-4B"
+        assert config.device_map == "auto"
+        assert config.quantization == "4bit"
+        assert config.torch_dtype == "float16"
+        assert config.max_new_tokens == 2048
+        assert config.trust_remote_code is True

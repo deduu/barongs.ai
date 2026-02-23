@@ -14,6 +14,8 @@ from src.applications.search_agent.tools.content_fetcher import ContentFetcherTo
 from src.applications.search_agent.tools.search_api import BraveSearchTool, DuckDuckGoSearchTool
 from src.applications.search_agent.tools.url_validator import URLValidatorTool
 from src.core.interfaces.orchestrator import Orchestrator
+from src.core.llm.base import LLMProvider
+from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
 from src.core.llm.providers.openai import OpenAIProvider
 from src.core.llm.providers.openai_compatible import OpenAICompatibleProvider
 from src.core.llm.registry import LLMProviderRegistry
@@ -29,7 +31,19 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
     # --- LLM Setup ---
     registry = LLMProviderRegistry()
 
-    if settings.llm_base_url:
+    provider: LLMProvider
+    if settings.llm_provider == "huggingface":
+        # Local HuggingFace Transformers model
+        hf_config = HuggingFaceConfig(
+            model_id=settings.hf_model_id,
+            device_map=settings.hf_device_map,
+            quantization=settings.hf_quantization,  # type: ignore[arg-type]
+            torch_dtype=settings.hf_torch_dtype,
+            max_new_tokens=settings.hf_max_new_tokens,
+            trust_remote_code=settings.hf_trust_remote_code,
+        )
+        provider = HuggingFaceProvider(config=hf_config)
+    elif settings.llm_base_url:
         # OpenAI-compatible local model
         provider = OpenAICompatibleProvider(
             base_url=settings.llm_base_url,
@@ -39,7 +53,7 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         )
     else:
         # Standard OpenAI
-        provider = OpenAIProvider(  # type: ignore[assignment]
+        provider = OpenAIProvider(
             api_key=settings.llm_api_key,
             default_model=settings.llm_model,
         )

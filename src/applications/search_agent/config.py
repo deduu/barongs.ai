@@ -22,6 +22,14 @@ class SearchAgentSettings(AppSettings):
     search_max_results: int = 20
     search_max_content_length: int = 10000
 
+    # HuggingFace local model
+    hf_model_id: str = "Qwen/Qwen3-4B"
+    hf_device_map: str = "auto"
+    hf_quantization: str = "4bit"  # "none" | "4bit" | "8bit"
+    hf_torch_dtype: str = "float16"
+    hf_max_new_tokens: int = 2048
+    hf_trust_remote_code: bool = True
+
     # Memory
     conversation_window_size: int = 20
     semantic_memory_enabled: bool = True
