@@ -1,25 +1,108 @@
+<div align="center">
+
+<!-- TODO: Replace with your logo. Recommended: 400-600px wide, transparent PNG or SVG -->
+<!-- <img src="assets/logo.png" alt="Pormetheus Logo" width="500"> -->
+
 # Pormetheus
 
-Production-ready Python AI agent framework with async-first design, enterprise middleware, and modular architecture.
+**Production-ready Python AI agent framework with async-first design, enterprise middleware, and modular architecture.**
+
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#docker)
+
+[![GitHub stars](https://img.shields.io/github/stars/deduu/prometheus?style=social)](https://github.com/deduu/prometheus/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/deduu/prometheus)](https://github.com/deduu/prometheus/issues)
+[![GitHub last commit](https://img.shields.io/github/last-commit/deduu/prometheus)](https://github.com/deduu/prometheus/commits/main)
+
+[Getting Started](#quick-start) | [Docker Setup](#docker) | [Architecture](#architecture) | [API Reference](#openai-compatible-api-reference) | [Development](#development)
+
+</div>
+
+---
+
+## Demo
+
+<!-- TODO: Replace with actual demo recordings -->
+<!-- Record terminal: asciinema or ScreenToGif -->
+<!-- Record Open WebUI: ScreenToGif or OBS -->
+
+<div align="center">
+<table>
+<tr>
+<td align="center" width="50%">
+
+**CLI / API**
+
+<!-- <img src="assets/demo-cli.gif" alt="CLI Demo" width="100%"> -->
+
+*Search query with streamed citations*
+
+</td>
+<td align="center" width="50%">
+
+**Open WebUI**
+
+<!-- <img src="assets/demo-webui.gif" alt="Open WebUI Demo" width="100%"> -->
+
+*Chat interface with web research*
+
+</td>
+</tr>
+</table>
+
+> *Replace the placeholders above with your demo GIFs. See [assets/](#assets-needed) for recording tips.*
+
+</div>
+
+---
 
 ## Features
 
-- **Agent Framework** — Abstract base classes for Agent, Tool, Memory with a Strategy-pattern Orchestrator
-- **Async-First** — Built on FastAPI + httpx + asyncio, no blocking calls anywhere
-- **Enterprise Middleware** — Circuit breakers, rate limiting, API key auth, structured logging (structlog), timeouts
-- **LLM Provider Agnostic** — OpenAI, OpenAI-compatible (Ollama, vLLM, Azure), HuggingFace local models
-- **OpenAI-Compatible API** — `/v1/chat/completions` endpoint works with Open WebUI and other OpenAI clients
-- **MCP Integration** — Model Context Protocol client with automatic tool adaptation
-- **Streaming** — Server-Sent Events (SSE) for real-time token streaming
-- **Orchestration Strategies** — SingleAgent, Router, Pipeline, Parallel, swappable at runtime
-- **Docker-Ready** — Multi-stage Dockerfile included
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### Core Framework
+- Abstract Agent, Tool, Memory, Orchestrator
+- Strategy pattern: SingleAgent, Router, Pipeline, Parallel
+- Frozen immutable contexts
+- Pydantic v2 validation everywhere
+
+</td>
+<td width="33%" valign="top">
+
+### Enterprise Middleware
+- Circuit breakers on all external calls
+- Rate limiting per endpoint
+- API key authentication
+- Structured logging (structlog)
+- Configurable timeouts
+
+</td>
+<td width="33%" valign="top">
+
+### LLM & Integrations
+- OpenAI, Azure, Ollama, vLLM
+- HuggingFace local models (4/8-bit)
+- MCP tool integration
+- OpenAI-compatible API
+- SSE streaming
+
+</td>
+</tr>
+</table>
+
+---
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
+- **Python 3.11+**
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- [Docker](https://docs.docker.com/get-docker/) (for the full stack)
 
 ### Installation
 
@@ -41,32 +124,24 @@ pip install -e ".[local]"
 
 ```bash
 cp .env.example .env
-# Edit .env with your settings (API keys, etc.)
+# Edit .env — set at minimum: PROM_LLM_API_KEY
 ```
 
-### Run the Example App
+### Run Locally
 
 ```bash
+# Search agent (Perplexity-style chatbot)
+uvicorn src.applications.search_agent.main:app --reload --port 8000
+
+# Example app (minimal reference)
 uvicorn src.applications.example_app.main:app --reload --port 8000
 ```
 
-### Run the Search Agent
-
-```bash
-# Set your LLM API key in .env, then:
-uvicorn src.applications.search_agent.main:app --reload --port 8000
-```
-
-The search agent exposes:
-
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/search` | Search with web research and cited synthesis |
-| `POST /api/search/stream` | Streaming search with SSE |
-| `POST /v1/chat/completions` | OpenAI-compatible API (works with Open WebUI) |
-| `GET /health` | Health check |
+---
 
 ## Docker
+
+Start the full stack — **Pormetheus + Open WebUI + PostgreSQL + Redis** — in one command:
 
 ```bash
 cp .env.example .env
@@ -75,68 +150,138 @@ cp .env.example .env
 docker compose up --build
 ```
 
-This starts the full stack in one command:
-
 | Service | URL | Purpose |
-|---------|-----|---------|
-| Open WebUI | `http://localhost:3000` | Chat interface |
-| Pormetheus API | `http://localhost:8000` | Search agent backend |
-| PostgreSQL | `localhost:5432` | Persistent storage |
-| Redis | `localhost:6379` | Caching layer |
+|:--------|:----|:--------|
+| **Open WebUI** | [`http://localhost:3000`](http://localhost:3000) | Chat interface |
+| **Pormetheus API** | [`http://localhost:8000`](http://localhost:8000) | Search agent backend |
+| **PostgreSQL** | `localhost:5432` | Persistent storage |
+| **Redis** | `localhost:6379` | Caching layer |
 
-Open WebUI is pre-configured to connect to Pormetheus as its OpenAI-compatible backend. Once all containers are healthy, open `http://localhost:3000` and start chatting — queries go through the search agent pipeline (web research + synthesis with citations).
+Open WebUI is pre-configured to connect to Pormetheus. Once all containers are healthy, open [`http://localhost:3000`](http://localhost:3000) and start chatting.
 
-To run the example app instead of the search agent, set in your `.env`:
+<details>
+<summary><b>Configuration options</b></summary>
 
+**Run the example app instead:**
 ```
 PROM_APP_MODULE=src.applications.example_app.main:app
 ```
 
-Database credentials are configurable in `.env`:
-
+**Customize database credentials:**
 ```
 POSTGRES_USER=pormetheus
 POSTGRES_PASSWORD=pormetheus
 POSTGRES_DB=pormetheus
 ```
 
-### Setting up Open WebUI manually
+</details>
 
-If you already have Open WebUI running or prefer to configure it yourself:
+<details>
+<summary><b>Setting up Open WebUI manually</b></summary>
 
-1. **Start Pormetheus** (locally or via Docker):
-   ```bash
-   # Local
-   uvicorn src.applications.search_agent.main:app --host 0.0.0.0 --port 8000
+If you already have Open WebUI running separately:
 
-   # Or Docker
-   docker compose up --build
-   ```
+1. Start Pormetheus (locally or via Docker)
 
-2. **Open the Open WebUI admin panel** — go to **Settings > Connections**.
+2. Open the **Open WebUI admin panel** — go to **Settings > Connections**
 
-3. **Add an OpenAI connection**:
-   - **API Base URL**:
-     - `http://host.docker.internal:8000/v1` — if Open WebUI runs in Docker and Pormetheus runs on the host
-     - `http://pormetheus:8000/v1` — if both run in the same Docker Compose stack
-     - `http://localhost:8000/v1` — if both run directly on the host (no Docker)
-   - **API Key**: the value of `PROM_API_KEY` from your `.env` (default: `changeme`)
+3. Add an **OpenAI connection**:
+   | Scenario | API Base URL |
+   |:---------|:-------------|
+   | Open WebUI in Docker, Pormetheus on host | `http://host.docker.internal:8000/v1` |
+   | Both in the same Docker Compose | `http://pormetheus:8000/v1` |
+   | Both running directly on host | `http://localhost:8000/v1` |
 
-4. **Verify**: Click the refresh button next to the URL field. You should see the model listed (e.g., `gpt-4o` or whatever you set `PROM_LLM_MODEL` to).
+   **API Key**: value of `PROM_API_KEY` from your `.env` (default: `changeme`)
 
-5. **Start chatting**: Select the model in the chat interface. Search queries will trigger web research; direct questions get answered immediately.
+4. Click the **refresh button** next to the URL field — you should see the model listed
 
-> **Note**: If `PROM_OPENAI_AUTH_ENABLED` is `false` (default), the API key field in Open WebUI can be any non-empty string. Set it to `true` in your `.env` and use your actual `PROM_API_KEY` to require authentication.
+5. **Start chatting** — search queries trigger web research; direct questions get answered immediately
 
-### OpenAI-Compatible API Reference
+> If `PROM_OPENAI_AUTH_ENABLED` is `false` (default), the API key field in Open WebUI can be any non-empty string.
 
-The search agent exposes a standard OpenAI-compatible API at `/v1`:
+</details>
+
+---
+
+## Architecture
+
+<!-- TODO: Replace ASCII diagram with a proper image for a polished look -->
+<!-- Create with: Excalidraw, draw.io, or Mermaid. Export to assets/architecture.png -->
+<!-- <img src="assets/architecture.png" alt="Architecture Diagram" width="100%"> -->
+
+```mermaid
+graph TD
+    Client["HTTP Client / Open WebUI"] --> App["FastAPI App"]
+    App --> Orch["Orchestrator"]
+    Orch --> Strategy{"Strategy"}
+    Strategy --> Single["SingleAgent"]
+    Strategy --> Router["Router"]
+    Strategy --> Pipeline["Pipeline"]
+    Strategy --> Parallel["Parallel"]
+    Single --> Agent["Agent(s)"]
+    Router --> Agent
+    Pipeline --> Agent
+    Parallel --> Agent
+    Agent --> Tools["Tool(s)"]
+    Tools --> External["External APIs"]
+
+    style Client fill:#0ea5e9,stroke:#0284c7,color:#fff
+    style App fill:#10b981,stroke:#059669,color:#fff
+    style Orch fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    style Strategy fill:#f59e0b,stroke:#d97706,color:#fff
+    style Agent fill:#ef4444,stroke:#dc2626,color:#fff
+    style Tools fill:#6366f1,stroke:#4f46e5,color:#fff
+```
+
+| Directory | Purpose |
+|:----------|:--------|
+| `src/core/` | Generic framework — interfaces, models, orchestrator, server, middleware |
+| `src/applications/` | Concrete apps built on the core framework |
+
+Dependencies are unidirectional: `applications -> core`, never `core -> applications`.
+
+> See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full deep-dive.
+
+---
+
+## Applications
+
+### Search Agent
+
+> Perplexity-style search chatbot — the flagship application.
+
+| Feature | Description |
+|:--------|:------------|
+| **Query Analysis** | Classifies queries as search vs. direct answer |
+| **Web Research** | Parallel search via DuckDuckGo (free) or Brave (API key) |
+| **Synthesis** | LLM-powered answers with clickable markdown citations |
+| **Streaming** | Real-time token streaming via SSE |
+| **OpenAI API** | Drop-in `/v1/chat/completions` endpoint |
+
+**Endpoints:**
+
+| Method | Path | Description |
+|:-------|:-----|:------------|
+| `POST` | `/api/search` | Search with cited synthesis |
+| `POST` | `/api/search/stream` | Streaming search with SSE |
+| `POST` | `/v1/chat/completions` | OpenAI-compatible API |
+| `GET` | `/v1/models` | List available models |
+| `GET` | `/health` | Health check |
+
+### Example App
+
+Minimal reference app with an `EchoAgent`. Use as a template when building new applications.
+
+---
+
+## OpenAI-Compatible API Reference
 
 ```bash
 # List available models
 curl http://localhost:8000/v1/models
 
-# Chat completion (non-streaming)
+# Chat completion
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -144,7 +289,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
     "messages": [{"role": "user", "content": "What is FastAPI?"}]
   }'
 
-# Chat completion (streaming)
+# Streaming
 curl -N -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -154,65 +299,55 @@ curl -N -X POST http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-The `model` field should match `PROM_LLM_MODEL` (default: `gpt-4o`). Check `GET /v1/models` to see what's registered.
+> The `model` field should match `PROM_LLM_MODEL` (default: `gpt-4o`).
 
-## Architecture
-
-```
-[HTTP Client / Open WebUI]
-         |
-    [FastAPI App]  ── created by create_app()
-         |
-    [Orchestrator] ── asyncio.wait_for(timeout=30s)
-         |
-  [Strategy: Single | Router | Pipeline | Parallel]
-         |
-    [Agent(s)]     ── frozen AgentContext in, AgentResult out
-         |
-    [Tool(s)]      ── external I/O with circuit breakers
-```
-
-- `src/core/` — Generic framework library (interfaces, models, orchestrator, server, middleware)
-- `src/applications/` — Concrete apps built on the core framework
-- Dependencies are unidirectional: `applications -> core`, never `core -> applications`
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full documentation.
-
-## Applications
-
-### Example App
-
-Minimal reference app demonstrating framework wiring with an `EchoAgent`. Use as a template for new applications.
-
-### Search Agent
-
-Perplexity-style search chatbot with:
-
-- **Query Analysis** — Classifies queries as search vs. direct answer
-- **Web Research** — Parallel search via DuckDuckGo (free) or Brave (API key), content fetching, URL validation
-- **Synthesis** — LLM-powered answer generation with clickable markdown citations
-- **Streaming** — Real-time token streaming via SSE
-- **OpenAI API** — Drop-in replacement for OpenAI chat completions
+---
 
 ## Development
 
 ```bash
+make install    # Install dependencies
 make test       # Run tests with coverage
 make lint       # Lint with ruff
 make typecheck  # Type check with mypy
 make format     # Auto-format code
-make check      # Run all checks (lint + typecheck + test)
+make check      # All checks (lint + typecheck + test)
 ```
 
-### Project Rules
+<details>
+<summary><b>Project rules</b></summary>
 
 - All I/O must be async
 - Pydantic validation on all inputs
 - Circuit breakers on all external API calls
 - TDD: write tests before implementation
+- See [CLAUDE.md](CLAUDE.md) for complete development rules
 
-See [CLAUDE.md](CLAUDE.md) for complete development rules.
+</details>
+
+---
+
+## Assets Needed
+
+> **For contributors:** To complete the visual polish of this README, the following assets are needed in the `assets/` directory.
+
+| File | Purpose | How to create |
+|:-----|:--------|:--------------|
+| `assets/logo.png` | Project logo/banner (400-600px wide, transparent) | Figma, Canva, or AI image generator |
+| `assets/demo-cli.gif` | Terminal demo of a search query | [asciinema](https://asciinema.org) + [agg](https://github.com/asciinema/agg), or [ScreenToGif](https://www.screentogif.com) |
+| `assets/demo-webui.gif` | Open WebUI chat demo | ScreenToGif or OBS |
+| `assets/architecture.png` | Architecture diagram (optional — Mermaid renders on GitHub) | [Excalidraw](https://excalidraw.com) or [draw.io](https://draw.io) |
+
+Once assets are added, uncomment the corresponding `<img>` tags in this README.
+
+---
+
+<div align="center">
 
 ## License
 
 [MIT](LICENSE)
+
+Made with Python, FastAPI, and too much coffee.
+
+</div>
