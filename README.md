@@ -85,20 +85,33 @@ To run the example app instead, set `PROM_APP_MODULE` in your `.env`:
 PROM_APP_MODULE=src.applications.example_app.main:app
 ```
 
-### Run with Open WebUI
+### Run with Open WebUI (Full Stack)
 
-A pre-configured compose file starts both Pormetheus and [Open WebUI](https://github.com/open-webui/open-webui) together:
+A pre-configured compose file starts the full stack — Pormetheus, [Open WebUI](https://github.com/open-webui/open-webui), PostgreSQL, and Redis — in one command:
 
 ```bash
+cp .env.example .env
+# Edit .env — set at minimum: PROM_LLM_API_KEY
+
 docker compose -f docker-compose.openwebui.yml up --build
 ```
 
-| Service | URL |
-|---------|-----|
-| Pormetheus API | `http://localhost:8000` |
-| Open WebUI | `http://localhost:3000` |
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Open WebUI | `http://localhost:3000` | Chat interface |
+| Pormetheus API | `http://localhost:8000` | Search agent backend |
+| PostgreSQL | `localhost:5432` | Persistent storage (Open WebUI + Pormetheus) |
+| Redis | `localhost:6379` | Caching layer |
 
-Open WebUI is pre-configured to connect to Pormetheus as its OpenAI-compatible backend. Once both containers are healthy, open `http://localhost:3000` in your browser and start chatting — queries go through the search agent pipeline (web research + synthesis with citations).
+Open WebUI is pre-configured to connect to Pormetheus as its OpenAI-compatible backend. Once all containers are healthy, open `http://localhost:3000` and start chatting — queries go through the search agent pipeline (web research + synthesis with citations).
+
+You can customize the database credentials in your `.env`:
+
+```
+POSTGRES_USER=pormetheus
+POSTGRES_PASSWORD=pormetheus
+POSTGRES_DB=pormetheus
+```
 
 ### Setting up Open WebUI manually
 
