@@ -24,6 +24,7 @@ class AppSettings(BaseSettings):
     # Security
     api_key: str = Field(default="changeme", description="API key for auth")
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    openai_auth_enabled: bool = False
 
     # Timeouts
     agent_timeout_seconds: float = 30.0
