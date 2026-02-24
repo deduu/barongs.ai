@@ -1,5 +1,5 @@
 [project]
-name = "pormetheus"
+name = "barongsai"
 version = "0.1.0"
 description = "Production-ready Python AI agent framework"
 requires-python = ">=3.11"
@@ -55,10 +55,10 @@ local = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/deduu/prometheus"
-Repository = "https://github.com/deduu/prometheus"
-Documentation = "https://github.com/deduu/prometheus/blob/main/docs/ARCHITECTURE.md"
-"Bug Tracker" = "https://github.com/deduu/prometheus/issues"
+Homepage = "https://github.com/deduu/barongsai"
+Repository = "https://github.com/deduu/barongsai"
+Documentation = "https://github.com/deduu/barongsai/blob/main/docs/ARCHITECTURE.md"
+"Bug Tracker" = "https://github.com/deduu/barongsai/issues"
 
 [build-system]
 requires = ["setuptools>=75.0"]

@@ -17,18 +17,18 @@ class StreamableAgent(Protocol):
 
 @dataclass
 class RegisteredModel:
-    """A Pormetheus agent/orchestrator registered as an OpenAI-compatible model."""
+    """A Barongsai agent/orchestrator registered as an OpenAI-compatible model."""
 
     model_id: str
     orchestrator: Orchestrator
-    owned_by: str = "pormetheus"
+    owned_by: str = "barongsai"
     description: str = ""
     streamable_agent: StreamableAgent | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class ModelRegistry:
-    """Maps OpenAI model names to Pormetheus orchestrator instances."""
+    """Maps OpenAI model names to Barongsai orchestrator instances."""
 
     def __init__(self) -> None:
         self._models: dict[str, RegisteredModel] = {}
@@ -38,7 +38,7 @@ class ModelRegistry:
         model_id: str,
         orchestrator: Orchestrator,
         *,
-        owned_by: str = "pormetheus",
+        owned_by: str = "barongsai",
         description: str = "",
         streamable_agent: StreamableAgent | None = None,
     ) -> None:

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Pormetheus AI Agent Framework - Lambda Deployment
+Description: Barongsai AI Agent Framework - Lambda Deployment
 
 Globals:
   Function:
@@ -9,7 +9,7 @@ Globals:
     Runtime: python3.11
 
 Resources:
-  PormetheusFn:
+  BarongsaiFn:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src.applications.example_app.lambda_handler.handler
@@ -22,8 +22,8 @@ Resources:
             Method: ANY
       Environment:
         Variables:
-          PROM_ENVIRONMENT: production
-          PROM_LOG_LEVEL: INFO
+          BGS_ENVIRONMENT: production
+          BGS_LOG_LEVEL: INFO
 
 Outputs:
   ApiUrl:

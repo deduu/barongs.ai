@@ -1,7 +1,7 @@
 # Example App Rules
 
 ## Purpose
-Reference application demonstrating how to build on the pormetheus core framework.
+Reference application demonstrating how to build on the barongsai core framework.
 Use this as a template when creating new applications.
 
 ## Structure

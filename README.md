@@ -1,9 +1,9 @@
 <div align="center">
 
-<!-- TODO: Replace with your logo. Recommended: 400-600px wide, transparent PNG or SVG -->
-<!-- <img src="assets/logo.png" alt="Pormetheus Logo" width="500"> -->
+<!-- TODO: Replace with your logo once ready (SVG or wider banner) -->
+<img src="assets/logo.png" alt="Barongsai Logo" width="500">
 
-# Pormetheus
+# Barongsai
 
 **Production-ready Python AI agent framework with async-first design, enterprise middleware, and modular architecture.**
 
@@ -12,9 +12,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#docker)
 
-[![GitHub stars](https://img.shields.io/github/stars/deduu/prometheus?style=social)](https://github.com/deduu/prometheus/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/deduu/prometheus)](https://github.com/deduu/prometheus/issues)
-[![GitHub last commit](https://img.shields.io/github/last-commit/deduu/prometheus)](https://github.com/deduu/prometheus/commits/main)
+[![GitHub stars](https://img.shields.io/github/stars/deduu/barongsai?style=social)](https://github.com/deduu/barongsai/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/deduu/barongsai)](https://github.com/deduu/barongsai/issues)
+[![GitHub last commit](https://img.shields.io/github/last-commit/deduu/barongsai)](https://github.com/deduu/barongsai/commits/main)
 
 [Getting Started](#quick-start) | [Docker Setup](#docker) | [Architecture](#architecture) | [API Reference](#openai-compatible-api-reference) | [Development](#development)
 
@@ -24,35 +24,14 @@
 
 ## Demo
 
-<!-- TODO: Replace with actual demo recordings -->
-<!-- Record terminal: asciinema or ScreenToGif -->
-<!-- Record Open WebUI: ScreenToGif or OBS -->
-
 <div align="center">
-<table>
-<tr>
-<td align="center" width="50%">
 
-**CLI / API**
+https://github.com/user-attachments/assets/demo-webui.mp4
 
-<!-- <img src="assets/demo-cli.gif" alt="CLI Demo" width="100%"> -->
+*Search agent running in Open WebUI — web research with cited synthesis*
 
-*Search query with streamed citations*
-
-</td>
-<td align="center" width="50%">
-
-**Open WebUI**
-
-<!-- <img src="assets/demo-webui.gif" alt="Open WebUI Demo" width="100%"> -->
-
-*Chat interface with web research*
-
-</td>
-</tr>
-</table>
-
-> *Replace the placeholders above with your demo GIFs. See [assets/](#assets-needed) for recording tips.*
+<!-- TODO: Add a CLI demo GIF if desired -->
+<!-- <img src="assets/demo-cli.gif" alt="CLI Demo" width="80%"> -->
 
 </div>
 
@@ -107,8 +86,8 @@
 ### Installation
 
 ```bash
-git clone https://github.com/deduu/prometheus.git
-cd prometheus
+git clone https://github.com/deduu/barongsai.git
+cd barongsai
 
 # Install with uv (recommended)
 uv sync
@@ -124,7 +103,7 @@ pip install -e ".[local]"
 
 ```bash
 cp .env.example .env
-# Edit .env — set at minimum: PROM_LLM_API_KEY
+# Edit .env — set at minimum: BGS_LLM_API_KEY
 ```
 
 ### Run Locally
@@ -141,11 +120,11 @@ uvicorn src.applications.example_app.main:app --reload --port 8000
 
 ## Docker
 
-Start the full stack — **Pormetheus + Open WebUI + PostgreSQL + Redis** — in one command:
+Start the full stack — **Barongsai + Open WebUI + PostgreSQL + Redis** — in one command:
 
 ```bash
 cp .env.example .env
-# Edit .env — set at minimum: PROM_LLM_API_KEY
+# Edit .env — set at minimum: BGS_LLM_API_KEY
 
 docker compose up --build
 ```
@@ -153,25 +132,25 @@ docker compose up --build
 | Service | URL | Purpose |
 |:--------|:----|:--------|
 | **Open WebUI** | [`http://localhost:3000`](http://localhost:3000) | Chat interface |
-| **Pormetheus API** | [`http://localhost:8000`](http://localhost:8000) | Search agent backend |
+| **Barongsai API** | [`http://localhost:8000`](http://localhost:8000) | Search agent backend |
 | **PostgreSQL** | `localhost:5432` | Persistent storage |
 | **Redis** | `localhost:6379` | Caching layer |
 
-Open WebUI is pre-configured to connect to Pormetheus. Once all containers are healthy, open [`http://localhost:3000`](http://localhost:3000) and start chatting.
+Open WebUI is pre-configured to connect to Barongsai. Once all containers are healthy, open [`http://localhost:3000`](http://localhost:3000) and start chatting.
 
 <details>
 <summary><b>Configuration options</b></summary>
 
 **Run the example app instead:**
 ```
-PROM_APP_MODULE=src.applications.example_app.main:app
+BGS_APP_MODULE=src.applications.example_app.main:app
 ```
 
 **Customize database credentials:**
 ```
-POSTGRES_USER=pormetheus
-POSTGRES_PASSWORD=pormetheus
-POSTGRES_DB=pormetheus
+POSTGRES_USER=barongsai
+POSTGRES_PASSWORD=barongsai
+POSTGRES_DB=barongsai
 ```
 
 </details>
@@ -181,34 +160,30 @@ POSTGRES_DB=pormetheus
 
 If you already have Open WebUI running separately:
 
-1. Start Pormetheus (locally or via Docker)
+1. Start Barongsai (locally or via Docker)
 
 2. Open the **Open WebUI admin panel** — go to **Settings > Connections**
 
 3. Add an **OpenAI connection**:
    | Scenario | API Base URL |
    |:---------|:-------------|
-   | Open WebUI in Docker, Pormetheus on host | `http://host.docker.internal:8000/v1` |
-   | Both in the same Docker Compose | `http://pormetheus:8000/v1` |
+   | Open WebUI in Docker, Barongsai on host | `http://host.docker.internal:8000/v1` |
+   | Both in the same Docker Compose | `http://barongsai:8000/v1` |
    | Both running directly on host | `http://localhost:8000/v1` |
 
-   **API Key**: value of `PROM_API_KEY` from your `.env` (default: `changeme`)
+   **API Key**: value of `BGS_API_KEY` from your `.env` (default: `changeme`)
 
 4. Click the **refresh button** next to the URL field — you should see the model listed
 
 5. **Start chatting** — search queries trigger web research; direct questions get answered immediately
 
-> If `PROM_OPENAI_AUTH_ENABLED` is `false` (default), the API key field in Open WebUI can be any non-empty string.
+> If `BGS_OPENAI_AUTH_ENABLED` is `false` (default), the API key field in Open WebUI can be any non-empty string.
 
 </details>
 
 ---
 
 ## Architecture
-
-<!-- TODO: Replace ASCII diagram with a proper image for a polished look -->
-<!-- Create with: Excalidraw, draw.io, or Mermaid. Export to assets/architecture.png -->
-<!-- <img src="assets/architecture.png" alt="Architecture Diagram" width="100%"> -->
 
 ```mermaid
 graph TD
@@ -299,7 +274,7 @@ curl -N -X POST http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-> The `model` field should match `PROM_LLM_MODEL` (default: `gpt-4o`).
+> The `model` field should match `BGS_LLM_MODEL` (default: `gpt-4o`).
 
 ---
 
@@ -327,27 +302,10 @@ make check      # All checks (lint + typecheck + test)
 
 ---
 
-## Assets Needed
-
-> **For contributors:** To complete the visual polish of this README, the following assets are needed in the `assets/` directory.
-
-| File | Purpose | How to create |
-|:-----|:--------|:--------------|
-| `assets/logo.png` | Project logo/banner (400-600px wide, transparent) | Figma, Canva, or AI image generator |
-| `assets/demo-cli.gif` | Terminal demo of a search query | [asciinema](https://asciinema.org) + [agg](https://github.com/asciinema/agg), or [ScreenToGif](https://www.screentogif.com) |
-| `assets/demo-webui.gif` | Open WebUI chat demo | ScreenToGif or OBS |
-| `assets/architecture.png` | Architecture diagram (optional — Mermaid renders on GitHub) | [Excalidraw](https://excalidraw.com) or [draw.io](https://draw.io) |
-
-Once assets are added, uncomment the corresponding `<img>` tags in this README.
-
----
-
 <div align="center">
 
 ## License
 
 [MIT](LICENSE)
-
-Made with Python, FastAPI, and too much coffee.
 
 </div>

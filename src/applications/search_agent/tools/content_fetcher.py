@@ -65,7 +65,7 @@ class ContentFetcherTool(Tool):
                     url,
                     timeout=self._timeout,
                     follow_redirects=True,
-                    headers={"User-Agent": "Pormetheus/1.0"},
+                    headers={"User-Agent": "Barongsai/1.0"},
                 )
                 response.raise_for_status()
                 return self._extract_text(response.text)

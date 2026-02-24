@@ -18,7 +18,7 @@ from src.core.server.openai_compat.models import (
 
 
 def openai_request_to_context(request: ChatCompletionRequest) -> AgentContext:
-    """Convert an OpenAI ChatCompletionRequest to a Pormetheus AgentContext.
+    """Convert an OpenAI ChatCompletionRequest to a Barongsai AgentContext.
 
     The last user message becomes ``user_message``; all other messages go
     into ``conversation_history``.

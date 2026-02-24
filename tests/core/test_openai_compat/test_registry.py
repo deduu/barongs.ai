@@ -20,7 +20,7 @@ class TestModelRegistry:
         registered = registry.get("test-model")
         assert registered.model_id == "test-model"
         assert registered.orchestrator is orch
-        assert registered.owned_by == "pormetheus"
+        assert registered.owned_by == "barongsai"
 
     def test_get_unknown_model_raises(self) -> None:
         registry = ModelRegistry()

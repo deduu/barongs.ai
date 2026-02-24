@@ -178,8 +178,8 @@ class TestModelListResponse:
     def test_structure(self) -> None:
         resp = ModelListResponse(
             data=[
-                ModelInfo(id="search-agent", owned_by="pormetheus"),
-                ModelInfo(id="chat-agent", owned_by="pormetheus"),
+                ModelInfo(id="search-agent", owned_by="barongsai"),
+                ModelInfo(id="chat-agent", owned_by="barongsai"),
             ]
         )
         assert resp.object == "list"

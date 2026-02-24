@@ -7,7 +7,7 @@ from src.core.models.results import AgentResult
 
 
 class Agent(ABC):
-    """Base class for all agents in the pormetheus framework.
+    """Base class for all agents in the barongsai framework.
 
     Every agent must implement the async `run` method.
     Agents receive a fully-populated AgentContext and return an AgentResult.

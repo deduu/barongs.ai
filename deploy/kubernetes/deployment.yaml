@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: pormetheus
+  name: barongsai
   labels:
-    app: pormetheus
+    app: barongsai
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: pormetheus
+      app: barongsai
   template:
     metadata:
       labels:
-        app: pormetheus
+        app: barongsai
     spec:
       containers:
-        - name: pormetheus
-          image: pormetheus:latest
+        - name: barongsai
+          image: barongsai:latest
           ports:
             - containerPort: 8000
           envFrom:
             - configMapRef:
-                name: pormetheus-config
+                name: barongsai-config
           livenessProbe:
             httpGet:
               path: /health

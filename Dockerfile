@@ -10,6 +10,6 @@ FROM deps AS app
 COPY src/ src/
 EXPOSE 8000
 
-# Default: search agent. Override with PROM_APP_MODULE env var.
-ENV PROM_APP_MODULE=src.applications.search_agent.main:app
-CMD ["sh", "-c", "python -m uvicorn $PROM_APP_MODULE --host 0.0.0.0 --port 8000"]
+# Default: search agent. Override with BGS_APP_MODULE env var.
+ENV BGS_APP_MODULE=src.applications.search_agent.main:app
+CMD ["sh", "-c", "python -m uvicorn $BGS_APP_MODULE --host 0.0.0.0 --port 8000"]

@@ -5,13 +5,13 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-pormetheus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pormetheus}
-      POSTGRES_DB: ${POSTGRES_DB:-pormetheus}
+      POSTGRES_USER: ${POSTGRES_USER:-barongsai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-barongsai}
+      POSTGRES_DB: ${POSTGRES_DB:-barongsai}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pormetheus}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-barongsai}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,15 +31,15 @@ services:
     restart: unless-stopped
 
   # --- Backend ---
-  pormetheus:
+  barongsai:
     build: .
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
-      PROM_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pormetheus}:${POSTGRES_PASSWORD:-pormetheus}@postgres:5432/${POSTGRES_DB:-pormetheus}
-      PROM_REDIS_URL: redis://redis:6379/0
+      BGS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-barongsai}:${POSTGRES_PASSWORD:-barongsai}@postgres:5432/${POSTGRES_DB:-barongsai}
+      BGS_REDIS_URL: redis://redis:6379/0
     volumes:
       - ./src:/app/src
     depends_on:
@@ -60,12 +60,12 @@ services:
     ports:
       - "3000:8080"
     environment:
-      OPENAI_API_BASE_URL: http://pormetheus:8000/v1
-      OPENAI_API_KEY: ${PROM_API_KEY:-changeme}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pormetheus}:${POSTGRES_PASSWORD:-pormetheus}@postgres:5432/${POSTGRES_DB:-pormetheus}
+      OPENAI_API_BASE_URL: http://barongsai:8000/v1
+      OPENAI_API_KEY: ${BGS_API_KEY:-changeme}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-barongsai}:${POSTGRES_PASSWORD:-barongsai}@postgres:5432/${POSTGRES_DB:-barongsai}
       WEBUI_AUTH: "false"
     depends_on:
-      pormetheus:
+      barongsai:
         condition: service_healthy
       postgres:
         condition: service_healthy

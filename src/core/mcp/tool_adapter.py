@@ -10,9 +10,9 @@ from src.core.models.results import ToolResult
 
 
 class MCPToolAdapter(Tool):
-    """Wraps an MCP server tool as a pormetheus Tool instance.
+    """Wraps an MCP server tool as a barongsai Tool instance.
 
-    This adapter translates between the pormetheus Tool interface and MCP tool calls,
+    This adapter translates between the barongsai Tool interface and MCP tool calls,
     allowing MCP tools to be used seamlessly within the agent framework.
     """
 

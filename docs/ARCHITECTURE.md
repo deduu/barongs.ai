@@ -1,4 +1,4 @@
-# Pormetheus — Architecture Documentation
+# Barongsai — Architecture Documentation
 
 > Generated 2026-02-23 | Scope: Full codebase
 > Stack: Python 3.11+, FastAPI, Pydantic v2, asyncio, httpx
@@ -7,7 +7,7 @@
 
 ## 1. Project Overview
 
-Pormetheus is a production-ready Python AI agent framework providing generic, reusable abstractions (Agent, Tool, Memory, Orchestrator) so concrete AI applications can be built without reinventing infrastructure concerns like timeout enforcement, circuit breaking, rate limiting, authentication, structured logging, and LLM provider integration.
+Barongsai is a production-ready Python AI agent framework providing generic, reusable abstractions (Agent, Tool, Memory, Orchestrator) so concrete AI applications can be built without reinventing infrastructure concerns like timeout enforcement, circuit breaking, rate limiting, authentication, structured logging, and LLM provider integration.
 
 The framework ships two concrete applications:
 - **example_app** — Minimal reference app demonstrating framework wiring, using a trivial `EchoAgent`.
@@ -18,7 +18,7 @@ The framework ships two concrete applications:
 ## 2. Directory Structure
 
 ```
-pormetheus/
+barongsai/
 ├── pyproject.toml                   # Project metadata, dependencies, ruff/mypy/pytest config
 ├── CLAUDE.md                        # Development rules and architecture conventions
 │
@@ -33,7 +33,7 @@ pormetheus/
 │   │   │   ├── context.py           # AgentContext (frozen), ToolInput
 │   │   │   ├── results.py           # AgentResult, ToolResult, ToolCallRecord
 │   │   │   ├── messages.py          # Message, Conversation, Role
-│   │   │   └── config.py            # AppSettings (pydantic-settings, PROM_ prefix)
+│   │   │   └── config.py            # AppSettings (pydantic-settings, BGS_ prefix)
 │   │   ├── orchestrator/strategies/
 │   │   │   ├── single_agent.py      # SingleAgentStrategy
 │   │   │   ├── router.py            # RouterStrategy
@@ -65,7 +65,7 @@ pormetheus/
 │   │   │       └── openai_compatible.py  # OpenAICompatibleProvider (vLLM, Ollama)
 │   │   ├── mcp/
 │   │   │   ├── client.py            # MCPClient, MCPServerConfig
-│   │   │   ├── tool_adapter.py      # MCPToolAdapter (wraps MCP tool as pormetheus Tool)
+│   │   │   ├── tool_adapter.py      # MCPToolAdapter (wraps MCP tool as barongsai Tool)
 │   │   │   └── skills_loader.py     # load_skills_md()
 │   │   └── utils/
 │   │       ├── async_helpers.py     # gather_with_timeout, retry_async
@@ -161,7 +161,7 @@ class OrchestratorStrategy(Protocol):
 
 **Composite Agent** (`src/applications/search_agent/agents/search_pipeline.py`): `SearchPipelineAgent` implements `Agent` and internally orchestrates `QueryAnalyzer → WebResearcher → Synthesizer` (or `DirectAnswerer`). The outer `Orchestrator` sees it as a single agent, keeping inter-agent routing inside the composite without violating the "agents never call each other via the orchestrator" rule.
 
-**Adapter** (`src/core/mcp/tool_adapter.py`): `MCPToolAdapter` implements `Tool` and delegates to `MCPClient`. Any MCP server tool becomes a first-class pormetheus tool.
+**Adapter** (`src/core/mcp/tool_adapter.py`): `MCPToolAdapter` implements `Tool` and delegates to `MCPClient`. Any MCP server tool becomes a first-class barongsai tool.
 
 **Registry** (`src/core/llm/registry.py`, `src/core/server/openai_compat/registry.py`): Both use the same pattern — a dict keyed by string name, with `register()` / `get()` / `list_*()` methods.
 
@@ -448,40 +448,40 @@ def create_router(orchestrator, settings) -> APIRouter:
 
 ## 7. Configuration
 
-All settings use `pydantic-settings` with `PROM_` prefix, loaded from environment or `.env`.
+All settings use `pydantic-settings` with `BGS_` prefix, loaded from environment or `.env`.
 
 **Base settings** (`src/core/models/config.py:AppSettings`):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PROM_APP_NAME` | `"pormetheus"` | FastAPI title |
-| `PROM_DEBUG` | `false` | FastAPI debug mode |
-| `PROM_LOG_LEVEL` | `"INFO"` | structlog level |
-| `PROM_ENVIRONMENT` | `"development"` | `"production"` enables JSON logging |
-| `PROM_API_KEY` | `"changeme"` | Required `X-API-Key` header value |
-| `PROM_CORS_ORIGINS` | `["*"]` | CORS origins (use specific list in production) |
-| `PROM_OPENAI_AUTH_ENABLED` | `false` | Bearer token auth on `/v1/*` |
-| `PROM_AGENT_TIMEOUT_SECONDS` | `30.0` | `asyncio.wait_for` on orchestrator |
-| `PROM_TOOL_TIMEOUT_SECONDS` | `15.0` | Available for tools to consume |
-| `PROM_RATE_LIMIT_REQUESTS` | `100` | Token bucket capacity |
-| `PROM_RATE_LIMIT_WINDOW_SECONDS` | `60` | Token bucket refill window |
-| `PROM_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Failures before circuit opens |
-| `PROM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `30` | Seconds before HALF_OPEN |
+| `BGS_APP_NAME` | `"barongsai"` | FastAPI title |
+| `BGS_DEBUG` | `false` | FastAPI debug mode |
+| `BGS_LOG_LEVEL` | `"INFO"` | structlog level |
+| `BGS_ENVIRONMENT` | `"development"` | `"production"` enables JSON logging |
+| `BGS_API_KEY` | `"changeme"` | Required `X-API-Key` header value |
+| `BGS_CORS_ORIGINS` | `["*"]` | CORS origins (use specific list in production) |
+| `BGS_OPENAI_AUTH_ENABLED` | `false` | Bearer token auth on `/v1/*` |
+| `BGS_AGENT_TIMEOUT_SECONDS` | `30.0` | `asyncio.wait_for` on orchestrator |
+| `BGS_TOOL_TIMEOUT_SECONDS` | `15.0` | Available for tools to consume |
+| `BGS_RATE_LIMIT_REQUESTS` | `100` | Token bucket capacity |
+| `BGS_RATE_LIMIT_WINDOW_SECONDS` | `60` | Token bucket refill window |
+| `BGS_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Failures before circuit opens |
+| `BGS_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `30` | Seconds before HALF_OPEN |
 
 **Search agent additions** (`src/applications/search_agent/config.py:SearchAgentSettings`):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PROM_LLM_PROVIDER` | `"openai"` | Registry key for LLM provider |
-| `PROM_LLM_MODEL` | `"gpt-4o"` | Model identifier |
-| `PROM_LLM_API_KEY` | `""` | OpenAI API key |
-| `PROM_LLM_BASE_URL` | `None` | Override for local models (Ollama, vLLM) |
-| `PROM_SEARCH_PROVIDER` | `"duckduckgo"` | `"duckduckgo"` or `"brave"` |
-| `PROM_SEARCH_API_KEY` | `""` | Brave Search API key |
-| `PROM_SEARCH_MAX_RESULTS` | `20` | Max results per query |
-| `PROM_CONVERSATION_WINDOW_SIZE` | `20` | ConversationMemory sliding window |
-| `PROM_SEMANTIC_MEMORY_ENABLED` | `true` | Enable SemanticMemory |
-| `PROM_MCP_SERVERS` | `[]` | MCP server identifiers |
+| `BGS_LLM_PROVIDER` | `"openai"` | Registry key for LLM provider |
+| `BGS_LLM_MODEL` | `"gpt-4o"` | Model identifier |
+| `BGS_LLM_API_KEY` | `""` | OpenAI API key |
+| `BGS_LLM_BASE_URL` | `None` | Override for local models (Ollama, vLLM) |
+| `BGS_SEARCH_PROVIDER` | `"duckduckgo"` | `"duckduckgo"` or `"brave"` |
+| `BGS_SEARCH_API_KEY` | `""` | Brave Search API key |
+| `BGS_SEARCH_MAX_RESULTS` | `20` | Max results per query |
+| `BGS_CONVERSATION_WINDOW_SIZE` | `20` | ConversationMemory sliding window |
+| `BGS_SEMANTIC_MEMORY_ENABLED` | `true` | Enable SemanticMemory |
+| `BGS_MCP_SERVERS` | `[]` | MCP server identifiers |
 
 **Run the servers:**
 ```bash

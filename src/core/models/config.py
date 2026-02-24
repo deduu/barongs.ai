@@ -8,11 +8,11 @@ class AppSettings(BaseSettings):
     """Base configuration loaded from environment / .env file.
 
     Every application extends this with its own settings.
-    All env vars are prefixed with PROM_ to avoid collisions.
+    All env vars are prefixed with BGS_ to avoid collisions.
     """
 
     # General
-    app_name: str = "pormetheus"
+    app_name: str = "barongsai"
     debug: bool = False
     log_level: str = "INFO"
     environment: str = "development"
@@ -39,7 +39,7 @@ class AppSettings(BaseSettings):
     circuit_breaker_recovery_timeout: int = 30
 
     model_config = {
-        "env_prefix": "PROM_",
+        "env_prefix": "BGS_",
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "extra": "ignore",

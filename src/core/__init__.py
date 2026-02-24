@@ -1,4 +1,4 @@
-"""Pormetheus Core — public API."""
+"""Barongsai Core — public API."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-# Pormetheus — Development Rules
+# Barongsai — Development Rules
 
 ## Project Overview
-Pormetheus is a production-ready Python AI agent framework. It provides
+Barongsai is a production-ready Python AI agent framework. It provides
 ABCs/Protocols for Agent, Tool, Memory, and Orchestrator, with a strategy
 pattern for orchestration and a modular application structure.
 

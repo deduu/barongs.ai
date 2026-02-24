@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 _INSTALL_MSG = (
     "HuggingFace provider requires: torch, transformers, accelerate, bitsandbytes. "
-    "Install with: pip install pormetheus[local]"
+    "Install with: pip install barongsai[local]"
 )
 
 # Lazy module-level imports — set to None when the packages are missing so the

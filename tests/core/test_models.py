@@ -106,7 +106,7 @@ class TestConversation:
 class TestAppSettings:
     def test_defaults(self):
         settings = AppSettings()
-        assert settings.app_name == "pormetheus"
+        assert settings.app_name == "barongsai"
         assert settings.debug is False
         assert settings.agent_timeout_seconds == 30.0
         assert settings.tool_timeout_seconds == 15.0
