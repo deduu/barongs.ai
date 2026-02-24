@@ -302,6 +302,61 @@ make check      # All checks (lint + typecheck + test)
 
 ---
 
+## Roadmap
+
+Barongsai's core framework (agent orchestration, async I/O, middleware patterns) is solid, but production infrastructure is still in progress. Here's what's done and what's planned:
+
+### Done
+
+- [x] Async-first architecture (httpx, AsyncOpenAI, asyncio throughout)
+- [x] Strategy-based orchestrator (SingleAgent, Router, Pipeline, Parallel)
+- [x] Circuit breakers on external HTTP tools
+- [x] Structured logging with structlog (JSON in production)
+- [x] Global exception handlers (429, 503, 504)
+- [x] API key authentication via FastAPI dependencies
+- [x] Multi-provider LLM support (OpenAI, Azure, Ollama/vLLM, HuggingFace local)
+- [x] OpenAI-compatible `/v1/chat/completions` endpoint
+- [x] SSE streaming
+- [x] Docker Compose stack (app + Open WebUI + Postgres + Redis)
+- [x] Pydantic v2 validation on all inputs
+
+### Phase 1 — Production Basics
+
+- [ ] Multi-worker server (gunicorn + uvicorn workers)
+- [ ] Wire PostgreSQL with SQLAlchemy async + connection pooling
+- [ ] Wire Redis for caching and session storage
+- [ ] Distributed rate limiting (Redis-backed, not in-memory)
+- [ ] Real health checks (`/ready` verifies DB, Redis, LLM connectivity)
+- [ ] Persistent conversation memory (Redis or Postgres-backed)
+- [ ] Database migrations with Alembic
+- [ ] Non-root Docker user + hardened Dockerfile
+- [ ] CORS defaults to explicit origins (not wildcard)
+
+### Phase 2 — Scale & Observability
+
+- [ ] Reverse proxy (Nginx/Traefik) with TLS termination
+- [ ] CI/CD pipeline (GitHub Actions: lint, typecheck, test, build, deploy)
+- [ ] Circuit breakers on LLM provider calls
+- [ ] Request correlation IDs for distributed tracing
+- [ ] Error reporting integration (Sentry)
+- [ ] Kubernetes Ingress + session affinity
+- [ ] Secrets management (sealed-secrets or Vault)
+- [ ] Prometheus metrics endpoint
+
+### Phase 3 — Scale to Thousands+
+
+- [ ] Database read replicas and query optimization
+- [ ] Message queue for async tasks (Celery/RabbitMQ)
+- [ ] Multi-region deployment
+- [ ] OAuth2/JWT authentication with scopes
+- [ ] Full observability stack (Prometheus + Grafana + ELK)
+- [ ] Load testing benchmarks (Locust/k6)
+- [ ] Helm chart for Kubernetes
+
+Contributions welcome — pick any unchecked item and open a PR!
+
+---
+
 <div align="center">
 
 ## License
