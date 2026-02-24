@@ -12,9 +12,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#docker)
 
-[![GitHub stars](https://img.shields.io/github/stars/deduu/barongsai?style=social)](https://github.com/deduu/barongsai/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/deduu/barongsai)](https://github.com/deduu/barongsai/issues)
-[![GitHub last commit](https://img.shields.io/github/last-commit/deduu/barongsai)](https://github.com/deduu/barongsai/commits/main)
+[![GitHub stars](https://img.shields.io/github/stars/deduu/barongs.ai?style=social)](https://github.com/deduu/barongs.ai/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/deduu/barongs.ai)](https://github.com/deduu/barongs.ai/issues)
+[![GitHub last commit](https://img.shields.io/github/last-commit/deduu/barongs.ai)](https://github.com/deduu/barongs.ai/commits/main)
 
 [Getting Started](#quick-start) | [Docker Setup](#docker) | [Architecture](#architecture) | [API Reference](#openai-compatible-api-reference) | [Development](#development)
 
@@ -86,8 +86,8 @@ https://github.com/user-attachments/assets/demo-webui.mp4
 ### Installation
 
 ```bash
-git clone https://github.com/deduu/barongsai.git
-cd barongsai
+git clone https://github.com/deduu/barongs.ai.git
+cd barongs.ai
 
 # Install with uv (recommended)
 uv sync

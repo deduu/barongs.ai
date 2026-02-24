@@ -55,10 +55,10 @@ local = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/deduu/barongsai"
-Repository = "https://github.com/deduu/barongsai"
-Documentation = "https://github.com/deduu/barongsai/blob/main/docs/ARCHITECTURE.md"
-"Bug Tracker" = "https://github.com/deduu/barongsai/issues"
+Homepage = "https://github.com/deduu/barongs.ai"
+Repository = "https://github.com/deduu/barongs.ai"
+Documentation = "https://github.com/deduu/barongs.ai/blob/main/docs/ARCHITECTURE.md"
+"Bug Tracker" = "https://github.com/deduu/barongs.ai/issues"
 
 [build-system]
 requires = ["setuptools>=75.0"]
