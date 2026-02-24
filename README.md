@@ -26,7 +26,7 @@
 
 <div align="center">
 
-https://github.com/user-attachments/assets/demo-webui.mp4
+https://github.com/user-attachments/assets/d9672714-ce9a-4b41-bd8c-1448c04f6d6a
 
 *Search agent running in Open WebUI — web research with cited synthesis*
 
