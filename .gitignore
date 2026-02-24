@@ -46,6 +46,9 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
+# Large media (hosted on GitHub CDN instead)
+*.mp4
+
 # Distribution
 *.tar.gz
 *.whl
