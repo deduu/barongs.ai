@@ -55,7 +55,24 @@ services:
       start_period: 15s
     restart: unless-stopped
 
-  # --- UI ---
+  # --- Frontend (dev) ---
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_URL: http://barongsai:8000
+    depends_on:
+      barongsai:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # --- UI (Open WebUI) ---
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     ports:
@@ -75,3 +92,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  frontend-node-modules:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 
 from src.applications.search_agent.agents.direct_answerer import DirectAnswererAgent
@@ -121,6 +123,28 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
     )
     openai_router = create_openai_router(model_registry, settings)
     fastapi_app.include_router(openai_router)
+
+    # --- Static assets & Chat UI ---
+    _base = Path(__file__).parent.parent.parent.parent  # project root
+    _assets = _base / "assets"
+    _frontend_dist = _base / "frontend" / "dist"
+
+    if _assets.exists():
+        from fastapi.staticfiles import StaticFiles
+
+        fastapi_app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
+
+    if _frontend_dist.exists():
+        from fastapi.staticfiles import StaticFiles as _SF
+
+        # Serve Vite-built JS/CSS chunks
+        _static_dir = _frontend_dist / "static"
+        if _static_dir.exists():
+            fastapi_app.mount("/static", _SF(directory=str(_static_dir)), name="static")
+
+        from src.core.server.ui_router import create_ui_router
+
+        fastapi_app.include_router(create_ui_router(_frontend_dist))
 
     return fastapi_app
 
