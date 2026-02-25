@@ -4,39 +4,76 @@
 
 /* ── CSS Variables — Dark (default) ─────────────────────────── */
 :root {
-  --bg:             #070b14;
-  --surface:        #0d1320;
-  --surface-2:      #111827;
-  --border:         #1e293b;
-  --text:           #f1f5f9;
-  --text-muted:     #475569;
-  --text-secondary: #94a3b8;
-  --accent:         #6366f1;
-  --accent-hover:   #7c3aed;
-  --accent-dim:     rgba(99, 102, 241, 0.12);
-  --user-bubble:    #1a2436;
-  --sidebar-w:      260px;
+  --bg:             #0f0f0f;
+  --surface:        #171717;
+  --surface-2:      #1f1f1f;
+  --surface-3:      #262626;
+  --border:         #2e2e2e;
+  --text:           #f5f5f5;
+  --text-muted:     #737373;
+  --text-secondary: #a3a3a3;
+  --accent:         #f5f5f5;
+  --accent-hover:   #d4d4d4;
+  --accent-dim:     rgba(245, 245, 245, 0.08);
+  --user-bubble:    #1f1f1f;
+
+  /* Glass — solid in clean design */
+  --glass-bg:       #171717;
+  --glass-border:   #2e2e2e;
+  --glass-blur:     0px;
+
+  /* Gradients — now solid */
+  --accent-gradient: #f5f5f5;
+
+  /* Shadows */
+  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:      0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-glow:    none;
+
+  /* Layout */
+  --sidebar-w:      280px;
+  --sidebar-rail:   64px;
   --source-w:       380px;
-  --header-h:       60px;
-  --radius:         12px;
-  --radius-sm:      8px;
+  --header-h:       56px;
+  --radius:         14px;
+  --radius-sm:      10px;
+  --radius-xs:      6px;
+
+  /* Motion */
   --ease:           cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
   --dur:            0.25s;
+  --dur-fast:       0.15s;
+  --dur-slow:       0.4s;
 }
 
 /* ── CSS Variables — Light ──────────────────────────────────── */
 .light {
-  --bg:             #f8fafc;
+  --bg:             #ffffff;
   --surface:        #ffffff;
-  --surface-2:      #f1f5f9;
-  --border:         #e2e8f0;
-  --text:           #0f172a;
-  --text-muted:     #94a3b8;
-  --text-secondary: #64748b;
-  --accent:         #4f46e5;
-  --accent-hover:   #6d28d9;
-  --accent-dim:     rgba(79, 70, 229, 0.08);
-  --user-bubble:    #ede9fe;
+  --surface-2:      #f9fafb;
+  --surface-3:      #f3f4f6;
+  --border:         #e5e7eb;
+  --text:           #111827;
+  --text-muted:     #9ca3af;
+  --text-secondary: #6b7280;
+  --accent:         #111827;
+  --accent-hover:   #374151;
+  --accent-dim:     rgba(17, 24, 39, 0.06);
+  --user-bubble:    #f3f4f6;
+
+  /* Glass — solid white */
+  --glass-bg:       #ffffff;
+  --glass-border:   #e5e7eb;
+  --glass-blur:     0px;
+
+  /* Shadows — very subtle */
+  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md:      0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-glow:    none;
+
+  /* Gradients — solid */
+  --accent-gradient: #111827;
 }
 
 /* ── Base ───────────────────────────────────────────────────── */
@@ -46,7 +83,7 @@ html, body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.6;
   transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
@@ -60,19 +97,57 @@ body {
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* ── Ambient glow (dark only) ───────────────────────────────── */
-.app-glow::before {
-  content: "";
+/* ── Glass utility — now solid surfaces ────────────────────── */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-accent {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+/* ── Animated background orbs — hidden ─────────────────────── */
+.animated-bg {
   position: fixed;
   inset: 0;
-  background:
-    radial-gradient(ellipse 60% 50% at 20% 40%, rgba(99, 102, 241, 0.07) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 60% at 80% 20%, rgba(124, 58, 237, 0.05) 0%, transparent 60%);
+  overflow: hidden;
   pointer-events: none;
   z-index: 0;
 }
-.light .app-glow::before {
-  background: none;
+
+.animated-bg::before,
+.animated-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.animated-bg .orb {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+/* ── Gradient border — now simple border ───────────────────── */
+.gradient-border {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  z-index: 0;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.gradient-border::before {
+  display: none;
+}
+
+.gradient-border:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
 }
 
 /* ── Streaming cursor ───────────────────────────────────────── */
@@ -93,7 +168,7 @@ body {
   padding: 0 3px;
   background: var(--accent-dim);
   color: var(--accent);
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
@@ -102,12 +177,9 @@ body {
   cursor: pointer;
   transition: background var(--dur), color var(--dur);
 }
-.light .cite-badge {
-  border-color: rgba(79, 70, 229, 0.3);
-}
 .cite-badge:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
 }
 
 /* ── Markdown content inside bubbles ────────────────────────── */
@@ -163,7 +235,7 @@ body {
   color: var(--text-secondary);
 }
 .msg-content a {
-  color: var(--accent);
+  color: var(--text-secondary);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -204,4 +276,33 @@ body {
 }
 .animate-bounce-dot-3 {
   animation: bounce 1.2s ease-in-out 0.4s infinite;
+}
+
+/* ── Stagger animation delays ──────────────────────────────── */
+.stagger-1 { animation-delay: 0.05s; animation-fill-mode: both; }
+.stagger-2 { animation-delay: 0.1s; animation-fill-mode: both; }
+.stagger-3 { animation-delay: 0.15s; animation-fill-mode: both; }
+.stagger-4 { animation-delay: 0.2s; animation-fill-mode: both; }
+.stagger-5 { animation-delay: 0.25s; animation-fill-mode: both; }
+.stagger-6 { animation-delay: 0.3s; animation-fill-mode: both; }
+
+/* ── Reduced motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Shimmer effect ────────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--surface-3) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
 }

@@ -29,7 +29,13 @@ marked.use({ gfm: true, breaks: true, renderer });
 /** Render markdown during streaming (no citation processing). */
 export function renderStreaming(text: string): string {
   try {
-    return DOMPurify.sanitize(marked.parse(text) as string);
+    let html = marked.parse(text) as string;
+    // Make all links open in new tab during streaming too
+    html = html.replace(
+      /<a\s+href="/g,
+      '<a target="_blank" rel="noopener noreferrer" href="',
+    );
+    return DOMPurify.sanitize(html, { ADD_ATTR: ["target", "rel"] });
   } catch {
     return escapeHtml(text);
   }
@@ -49,7 +55,24 @@ export function renderFinal(text: string): string {
       },
     );
 
-    return DOMPurify.sanitize(html, { ADD_ATTR: ["data-idx"] });
+    // Also catch [N](URL) → marked produces <a href="URL">N</a> (number-only text)
+    html = html.replace(
+      /<a\s+href="([^"]*)">(\d+)<\/a>/g,
+      (_match, _url: string, num: string) => {
+        const idx = parseInt(num) - 1;
+        return `<button class="cite-badge" data-idx="${idx}">${num}</button>`;
+      },
+    );
+
+    // Make all remaining <a> tags open in new tab
+    html = html.replace(
+      /<a\s+href="/g,
+      '<a target="_blank" rel="noopener noreferrer" href="',
+    );
+
+    return DOMPurify.sanitize(html, {
+      ADD_ATTR: ["data-idx", "target", "rel"],
+    });
   } catch {
     return escapeHtml(text);
   }

@@ -13,7 +13,7 @@ function resolveTheme(mode: ThemeMode): "dark" | "light" {
 
 export function useTheme() {
   const [theme, setThemeState] = useState<ThemeMode>(
-    () => getString("theme", "dark") as ThemeMode,
+    () => getString("theme", "light") as ThemeMode,
   );
 
   const apply = useCallback((mode: ThemeMode) => {

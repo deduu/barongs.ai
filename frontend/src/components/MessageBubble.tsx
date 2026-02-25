@@ -1,66 +1,68 @@
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useRef } from "react";
 import type { Message, Source } from "../types";
-
-function getFaviconUrl(url: string): string {
-  try {
-    return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=16`;
-  } catch {
-    return "";
-  }
-}
-
-function truncateUrl(url: string, max = 35): string {
-  try {
-    const u = new URL(url);
-    const s = u.hostname + u.pathname;
-    return s.length > max ? s.slice(0, max) + "\u2026" : s;
-  } catch {
-    return url.slice(0, max);
-  }
-}
+import SourceCards from "./SourceCards";
+import MessageActions from "./MessageActions";
 
 interface MessageBubbleProps {
   message: Message;
+  selectedModel: string;
   onSourceClick: (source: Source) => void;
 }
 
-function MessageBubbleInner({ message, onSourceClick }: MessageBubbleProps) {
+function MessageBubbleInner({ message, selectedModel, onSourceClick }: MessageBubbleProps) {
   const bubbleRef = useRef<HTMLDivElement>(null);
 
-  // Handle citation badge clicks via event delegation
+  // Handle citation badge clicks + intercept link navigation via event delegation
   const handleBubbleClick = useCallback(
     (e: React.MouseEvent) => {
+      // Citation badge → open source panel
       const badge = (e.target as HTMLElement).closest(
         ".cite-badge",
       ) as HTMLElement | null;
-      if (!badge) return;
-      const idx = parseInt(badge.dataset.idx ?? "-1");
-      if (idx >= 0 && message.sources[idx]) {
-        onSourceClick(message.sources[idx]);
+      if (badge) {
+        e.preventDefault();
+        const idx = parseInt(badge.dataset.idx ?? "-1");
+        if (idx >= 0 && message.sources[idx]) {
+          onSourceClick(message.sources[idx]);
+        }
+        return;
+      }
+
+      // Regular link → force open in new tab (safety net)
+      const anchor = (e.target as HTMLElement).closest("a") as HTMLAnchorElement | null;
+      if (anchor && anchor.href) {
+        e.preventDefault();
+        window.open(anchor.href, "_blank", "noopener,noreferrer");
       }
     },
     [message.sources, onSourceClick],
   );
 
-  // Auto-scroll kept in parent; this component just renders
-  useEffect(() => {
-    // no-op — scroll is handled by MessageList
-  }, []);
+  const timeStr = new Date(message.timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   if (message.role === "user") {
     return (
-      <div className="flex flex-col items-end gap-1 mb-6 animate-slide-up">
-        <div className="text-xs font-medium" style={{ color: "var(--accent)" }}>
-          You
+      <div className="mb-6 flex flex-col items-end gap-1.5 animate-fade-in-up">
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ color: "var(--text-muted)" }}
+          >
+            {timeStr}
+          </span>
+          <div
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold"
+            style={{ background: "var(--accent)", color: "var(--bg)" }}
+          >
+            U
+          </div>
         </div>
         <div
-          className="rounded-xl border px-4 py-3 text-[15px] leading-[1.75] break-words"
-          style={{
-            maxWidth: "min(700px, 88%)",
-            background: "var(--user-bubble)",
-            borderColor: "rgba(99, 102, 241, 0.15)",
-            borderBottomRightRadius: 4,
-          }}
+          className="glass rounded-2xl rounded-br-md px-4 py-3 text-[15px] leading-[1.75] break-words"
+          style={{ maxWidth: "min(600px, 85%)" }}
           dangerouslySetInnerHTML={{ __html: message.renderedHtml }}
         />
       </div>
@@ -69,65 +71,40 @@ function MessageBubbleInner({ message, onSourceClick }: MessageBubbleProps) {
 
   // Assistant message
   return (
-    <div className="flex flex-col items-start gap-1.5 mb-6 animate-slide-up">
-      <div
-        className="flex items-center gap-1.5 text-xs font-medium"
-        style={{ color: "var(--text-muted)" }}
-      >
+    <div className="group mb-6 animate-fade-in-up">
+      {/* Avatar + model name */}
+      <div className="mb-2 flex items-center gap-2">
         <div
-          className="flex h-5 w-5 items-center justify-center rounded-[5px] text-[10px] font-extrabold text-white"
-          style={{
-            background: "linear-gradient(135deg, var(--accent), var(--accent-hover))",
-          }}
+          className="flex h-7 flex-shrink-0 items-center justify-center rounded-lg px-2 text-[11px] font-semibold"
+          style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
         >
-          B
+          {selectedModel || "AI"}
         </div>
-        Barongsai
+        <span
+          className="text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {timeStr}
+        </span>
       </div>
 
-      {/* Source chips */}
-      {message.sources.length > 0 && (
-        <div
-          className="flex flex-wrap gap-1.5 mb-2"
-          style={{ maxWidth: "min(780px, 92%)" }}
-        >
-          {message.sources.map((src, i) => (
-            <button
-              key={i}
-              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
-              style={{
-                background: "var(--surface)",
-                borderColor: "var(--border)",
-                color: "var(--text-secondary)",
-                maxWidth: 210,
-                overflow: "hidden",
-              }}
-              onClick={() => onSourceClick(src)}
-            >
-              <img
-                src={getFaviconUrl(src.url)}
-                alt=""
-                className="h-3 w-3 flex-shrink-0"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-              <span className="truncate">
-                {src.title || truncateUrl(src.url)}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Inline source cards */}
+      <SourceCards sources={message.sources} onSourceClick={onSourceClick} />
 
       {/* Content */}
       <div
         ref={bubbleRef}
-        className={`msg-content text-[15px] leading-[1.75] break-words ${message.status === "streaming" ? "streaming-cursor" : ""}`}
-        style={{ maxWidth: "min(780px, 92%)" }}
+        className={`msg-content text-[15px] leading-[1.75] break-words ${
+          message.status === "streaming" ? "streaming-cursor" : ""
+        }`}
         onClick={handleBubbleClick}
         dangerouslySetInnerHTML={{ __html: message.renderedHtml }}
       />
+
+      {/* Actions (copy, feedback) */}
+      {message.status === "done" && (
+        <MessageActions messageId={message.id} rawContent={message.content} />
+      )}
     </div>
   );
 }

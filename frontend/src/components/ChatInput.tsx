@@ -1,4 +1,5 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
+import { SendIcon, PlusIcon } from "./icons";
 
 interface ChatInputProps {
   disabled: boolean;
@@ -7,12 +8,14 @@ interface ChatInputProps {
 
 export default function ChatInput({ disabled, onSend }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [charCount, setCharCount] = useState(0);
 
   const autoResize = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = "44px";
     ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+    setCharCount(ta.value.length);
   }, []);
 
   const handleSend = useCallback(() => {
@@ -23,6 +26,7 @@ export default function ChatInput({ disabled, onSend }: ChatInputProps) {
     onSend(text);
     ta.value = "";
     ta.style.height = "44px";
+    setCharCount(0);
   }, [disabled, onSend]);
 
   const handleKeyDown = useCallback(
@@ -36,43 +40,61 @@ export default function ChatInput({ disabled, onSend }: ChatInputProps) {
   );
 
   return (
-    <div
-      className="flex-shrink-0 border-t px-5 pb-4 pt-2.5"
-      style={{
-        borderColor: "var(--border)",
-        background: "var(--surface)",
-      }}
-    >
-      <div
-        className="flex items-end gap-2.5 rounded-xl border px-3 py-2 transition-colors focus-within:border-[var(--accent)]"
-        style={{
-          background: "var(--surface-2)",
-          borderColor: "var(--border)",
-        }}
-      >
-        <textarea
-          ref={textareaRef}
-          className="flex-1 resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-[var(--text-muted)]"
-          style={{ color: "var(--text)", minHeight: 44, maxHeight: 200, fontFamily: "inherit" }}
-          placeholder="Ask anything\u2026"
-          rows={1}
-          disabled={disabled}
-          onInput={autoResize}
-          onKeyDown={handleKeyDown}
-        />
-        <button
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white transition-colors disabled:cursor-not-allowed disabled:opacity-35"
-          style={{ background: "var(--accent)" }}
-          onClick={handleSend}
-          disabled={disabled}
-          title="Send (Enter)"
+    <div className="flex-shrink-0 px-4 pb-4 pt-2">
+      <div className="mx-auto max-w-3xl">
+        <div
+          className="rounded-2xl border"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
         >
-          &#10148;
-        </button>
+          <div className="px-4 pt-3 pb-2">
+            <textarea
+              ref={textareaRef}
+              className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-[var(--text-muted)]"
+              style={{ color: "var(--text)", minHeight: 44, maxHeight: 200, fontFamily: "inherit" }}
+              placeholder="Ask anything..."
+              rows={1}
+              disabled={disabled}
+              onInput={autoResize}
+              onKeyDown={handleKeyDown}
+              aria-label="Message input"
+            />
+          </div>
+          {/* Bottom toolbar */}
+          <div
+            className="flex items-center justify-between border-t px-3 py-2"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <div className="flex items-center gap-1">
+              <button
+                className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
+                style={{ color: "var(--text-muted)" }}
+                title="Attach file"
+                aria-label="Attach file"
+              >
+                <PlusIcon size={18} />
+              </button>
+              {charCount > 100 && (
+                <span
+                  className="text-[10px] tabular-nums"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {charCount}
+                </span>
+              )}
+            </div>
+            <button
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+              style={{ background: "var(--accent)", color: "var(--bg)" }}
+              onClick={handleSend}
+              disabled={disabled}
+              title="Send (Enter)"
+              aria-label="Send message"
+            >
+              <SendIcon size={16} />
+            </button>
+          </div>
+        </div>
       </div>
-      <p className="mt-1 text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-        Enter to send &nbsp;&middot;&nbsp; Shift+Enter for new line
-      </p>
     </div>
   );
 }

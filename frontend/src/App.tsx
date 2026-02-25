@@ -5,11 +5,21 @@ import { useTheme } from "./hooks/useTheme";
 import { useConversations } from "./hooks/useConversations";
 import { useModels } from "./hooks/useModels";
 import { useStreamSearch } from "./hooks/useStreamSearch";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import Sidebar from "./components/Sidebar";
 import MessageList from "./components/MessageList";
 import ChatInput from "./components/ChatInput";
 import SourcePanel from "./components/SourcePanel";
 import SettingsModal from "./components/SettingsModal";
+import WelcomeScreen from "./components/WelcomeScreen";
+import {
+  MenuIcon,
+  MoonIcon,
+  SunIcon,
+  MonitorIcon,
+  SettingsIcon,
+  BellIcon,
+} from "./components/icons";
 
 export default function App() {
   /* ── Theme ─────────────────────────────────────────────────── */
@@ -33,6 +43,7 @@ export default function App() {
     newChat,
     loadConversation,
     deleteConversation,
+    togglePin,
     saveCurrentConversation,
   } = useConversations();
 
@@ -63,6 +74,7 @@ export default function App() {
   /* ── Mobile detection ──────────────────────────────────────── */
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const handler = () => {
@@ -88,7 +100,7 @@ export default function App() {
     setTimeout(() => setSelectedSource(null), 280);
   }, []);
 
-  /* ── Settings modal ────────────────────────────────────────── */
+  /* ── Settings modal ──────────────────────────────────────── */
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleSaveApiKey = useCallback(
@@ -99,7 +111,19 @@ export default function App() {
     [saveApiKey, refreshModels],
   );
 
-  /* ── Quick send (welcome chips) ────────────────────────────── */
+  /* ── Keyboard shortcuts ──────────────────────────────────── */
+  useKeyboardShortcuts({
+    onNewChat: () => {
+      newChat();
+      if (isMobile) setSidebarOpen(false);
+    },
+    onOpenSettings: () => setSettingsOpen(true),
+    onCloseModal: () => {
+      if (settingsOpen) setSettingsOpen(false);
+    },
+  });
+
+  /* ── Quick send (welcome chips) ──────────────────────────── */
   const handleQuickSend = useCallback(
     (text: string) => {
       send(text);
@@ -107,12 +131,15 @@ export default function App() {
     [send],
   );
 
+  const showWelcome = messages.length === 0;
+
   /* ── Render ────────────────────────────────────────────────── */
   return (
-    <div className="app-glow relative flex h-screen overflow-hidden">
+    <div className="relative flex h-screen overflow-hidden" style={{ background: "var(--bg)" }}>
       {/* Sidebar */}
       <Sidebar
         open={sidebarOpen}
+        collapsed={sidebarCollapsed}
         isMobile={isMobile}
         conversations={conversations}
         currentConvId={currentConvId}
@@ -125,39 +152,42 @@ export default function App() {
           if (isMobile) setSidebarOpen(false);
         }}
         onDeleteConversation={deleteConversation}
+        onTogglePin={togglePin}
         onOpenSettings={() => setSettingsOpen(true)}
         onClose={() => setSidebarOpen(false)}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* Main area */}
       <main className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header */}
         <header
-          className="flex h-[var(--header-h)] flex-shrink-0 items-center justify-between border-b px-5"
-          style={{ borderColor: "var(--border)", zIndex: 5 }}
+          className="flex h-[var(--header-h)] flex-shrink-0 items-center justify-between border-b px-4"
+          style={{ zIndex: 5, borderColor: "var(--border)", background: "var(--surface)" }}
         >
           <div className="flex items-center gap-2.5">
-            {/* Hamburger (mobile) */}
-            <button
-              className="items-center rounded-lg border-none p-1.5 text-lg md:hidden"
-              style={{ color: "var(--text-secondary)", display: isMobile ? "flex" : "none" }}
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              title="Toggle sidebar"
-            >
-              &#9776;
-            </button>
+            {isMobile && (
+              <button
+                className="flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-[var(--surface-2)]"
+                style={{ color: "var(--text-secondary)" }}
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                aria-label="Toggle sidebar"
+              >
+                <MenuIcon size={20} />
+              </button>
+            )}
 
-            {/* Model select */}
             {models.length > 0 ? (
               <select
-                className="rounded-lg border px-2.5 py-1.5 text-[13px] outline-none transition-colors hover:border-[var(--accent)] focus:border-[var(--accent)]"
+                className="rounded-lg border px-3 py-1.5 text-[13px] font-medium outline-none transition-colors hover:bg-[var(--surface-2)]"
                 style={{
-                  background: "var(--surface-2)",
+                  background: "var(--surface)",
                   borderColor: "var(--border)",
                   color: "var(--text)",
                 }}
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
+                aria-label="Select model"
               >
                 {models.map((m) => (
                   <option key={m} value={m}>
@@ -166,71 +196,82 @@ export default function App() {
                 ))}
               </select>
             ) : (
-              <span
-                className="text-[13px]"
-                style={{ color: "var(--text-muted)" }}
-              >
+              <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
                 Barongsai
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
-              className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-              style={{
-                borderColor: "var(--border)",
-                color: "var(--text-secondary)",
-              }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
+              style={{ color: "var(--text-secondary)" }}
+              title="Notifications"
+              aria-label="Notifications"
+            >
+              <BellIcon size={16} />
+            </button>
+            <span
+              className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+              style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+            >
+              300
+            </span>
+            <button
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
+              style={{ color: "var(--text-secondary)" }}
               onClick={cycleTheme}
               title={`Theme: ${theme}`}
+              aria-label={`Switch theme, current: ${theme}`}
             >
-              <span>
-                {theme === "dark"
-                  ? "\uD83C\uDF19"
-                  : theme === "light"
-                    ? "\u2600\uFE0F"
-                    : "\uD83D\uDDA5\uFE0F"}
-              </span>
-              <span className="text-xs">
-                {theme.charAt(0).toUpperCase() + theme.slice(1)}
-              </span>
+              {theme === "dark" ? (
+                <MoonIcon size={16} />
+              ) : theme === "light" ? (
+                <SunIcon size={16} />
+              ) : (
+                <MonitorIcon size={16} />
+              )}
             </button>
             <button
-              className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-              style={{
-                borderColor: "var(--border)",
-                color: "var(--text-secondary)",
-              }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
+              style={{ color: "var(--text-secondary)" }}
               onClick={() => setSettingsOpen(true)}
-              title="Settings"
+              title="Settings (Ctrl+,)"
+              aria-label="Open settings"
             >
-              &#9881;
+              <SettingsIcon size={16} />
             </button>
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold"
+              style={{ background: "var(--surface-3)", color: "var(--text-secondary)" }}
+            >
+              U
+            </div>
           </div>
         </header>
 
-        {/* Messages */}
-        <MessageList
-          messages={messages}
-          isStreaming={isStreaming}
-          statusMessage={statusMessage}
-          onSourceClick={openSource}
-          onQuickSend={handleQuickSend}
-        />
-
-        {/* Input */}
-        <ChatInput disabled={isStreaming} onSend={send} />
+        {showWelcome ? (
+          <WelcomeScreen onSend={handleQuickSend} />
+        ) : (
+          <>
+            <MessageList
+              messages={messages}
+              isStreaming={isStreaming}
+              statusMessage={statusMessage}
+              selectedModel={selectedModel}
+              onSourceClick={openSource}
+            />
+            <ChatInput disabled={isStreaming} onSend={send} />
+          </>
+        )}
       </main>
 
-      {/* Source panel */}
       <SourcePanel
         open={sourcePanelOpen}
         source={selectedSource}
         onClose={closeSourcePanel}
       />
 
-      {/* Settings modal */}
       <SettingsModal
         open={settingsOpen}
         apiKey={apiKey}

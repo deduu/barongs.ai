@@ -34,6 +34,19 @@ export function useConversations() {
     [conversations],
   );
 
+  const togglePin = useCallback(
+    (id: string) => {
+      setConversations((prev) => {
+        const next = prev.map((c) =>
+          c.id === id ? { ...c, pinned: !c.pinned } : c,
+        );
+        persist(next);
+        return next;
+      });
+    },
+    [persist],
+  );
+
   const deleteConversation = useCallback(
     (id: string) => {
       setConversations((prev) => {
@@ -87,6 +100,7 @@ export function useConversations() {
     newChat,
     loadConversation,
     deleteConversation,
+    togglePin,
     saveCurrentConversation,
   } as const;
 }

@@ -24,4 +24,5 @@ export interface Conversation {
   title: string;
   messages: Message[];
   updatedAt: number;
+  pinned?: boolean;
 }
