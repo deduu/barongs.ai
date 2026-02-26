@@ -55,6 +55,19 @@ local = [
     "accelerate>=0.34.0",
     "bitsandbytes>=0.44.0",
 ]
+rag = [
+    "qdrant-client>=1.7.0",
+    "faiss-cpu>=1.7.0",
+    "rank-bm25>=0.2.2",
+]
+rag-local = [
+    "barongsai[rag]",
+    "sentence-transformers>=2.3.0",
+]
+rag-all = [
+    "barongsai[rag-local]",
+    "cohere>=5.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/deduu/barongs.ai"
@@ -138,6 +151,30 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "accelerate.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "qdrant_client.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "faiss.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "sentence_transformers.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "rank_bm25.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "cohere.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "numpy.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -22,6 +22,18 @@ from src.core.orchestrator import (
     RouterStrategy,
     SingleAgentStrategy,
 )
+from src.core.rag import (
+    Document,
+    Embedder,
+    HybridRetriever,
+    RAGConfig,
+    RAGTool,
+    Reranker,
+    ResultSource,
+    SearchResult,
+    SparseRetriever,
+    VectorStore,
+)
 from src.core.server.factory import create_app
 
 __all__ = [
@@ -30,6 +42,9 @@ __all__ = [
     "AgentResult",
     "AppSettings",
     "Conversation",
+    "Document",
+    "Embedder",
+    "HybridRetriever",
     "LLMMessage",
     "LLMProvider",
     "LLMProviderRegistry",
@@ -44,13 +59,20 @@ __all__ = [
     "OrchestratorStrategy",
     "ParallelStrategy",
     "PipelineStrategy",
+    "RAGConfig",
+    "RAGTool",
+    "Reranker",
+    "ResultSource",
     "Role",
     "RouterStrategy",
+    "SearchResult",
     "SingleAgentStrategy",
+    "SparseRetriever",
     "Tool",
     "ToolCallRecord",
     "ToolInput",
     "ToolResult",
+    "VectorStore",
     "create_app",
     "load_skills_md",
 ]
