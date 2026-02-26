@@ -38,6 +38,9 @@ class AppSettings(BaseSettings):
     circuit_breaker_failure_threshold: int = 5
     circuit_breaker_recovery_timeout: int = 30
 
+    # Redis (optional — needed for RedisMemory)
+    redis_url: str | None = None
+
     model_config = {
         "env_prefix": "BGS_",
         "env_file": ".env",
