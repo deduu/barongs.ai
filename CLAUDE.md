@@ -34,9 +34,35 @@ pattern for orchestration and a modular application structure.
 ## Development Workflow (MANDATORY)
 1. **TDD: Write tests BEFORE implementation** for agents, tools, orchestrator.
    - Test file must exist and have failing tests before the implementation file.
-2. **Plan mode for multi-file changes.** If a change touches 3+ files, use
-   plan mode first to outline the approach.
+2. **Plan mode by default.** Enter plan mode for ANY non-trivial task (3+ steps
+   or architectural decisions). If something goes sideways, STOP and re-plan.
 3. **Use TodoWrite** for task decomposition on complex features.
+
+## Workflow Orchestration
+- **Subagent Strategy**: Use subagents liberally — offload research, exploration,
+  and parallel analysis. One task per subagent for focused execution.
+- **Self-Improvement Loop**: After ANY correction, update `tasks/lessons.md`
+  with the pattern. Write rules that prevent the same mistake. Review lessons
+  at session start.
+- **Verification Before Done**: Never mark a task complete without proving it
+  works. Run tests, check logs. Ask: "Would a staff engineer approve this?"
+- **Demand Elegance**: For non-trivial changes, pause and ask "is there a more
+  elegant way?" Skip this for simple, obvious fixes — don't over-engineer.
+- **Autonomous Bug Fixing**: When given a bug report, just fix it. Point at
+  logs/errors/failing tests, then resolve. Zero hand-holding required.
+
+## Task Management
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+
+## Core Principles
+- **Simplicity First**: Make every change as simple as possible. Minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior dev standards.
+- **Minimal Impact**: Only touch what's necessary. Avoid introducing bugs.
 
 ## Architecture
 - `src/core/` — Framework library (interfaces, models, orchestrator, server)
