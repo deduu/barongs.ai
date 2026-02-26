@@ -26,9 +26,9 @@
 
 <div align="center">
 
-https://github.com/user-attachments/assets/d9672714-ce9a-4b41-bd8c-1448c04f6d6a
+https://github.com/user-attachments/assets/add862dd-8c90-4d25-a680-1db09a048c38
 
-*Search agent running in Open WebUI — web research with cited synthesis*
+_Search agent running in Open WebUI — web research with cited synthesis_
 
 <!-- TODO: Add a CLI demo GIF if desired -->
 <!-- <img src="assets/demo-cli.gif" alt="CLI Demo" width="80%"> -->
@@ -44,6 +44,7 @@ https://github.com/user-attachments/assets/d9672714-ce9a-4b41-bd8c-1448c04f6d6a
 <td width="33%" valign="top">
 
 ### Core Framework
+
 - Abstract Agent, Tool, Memory, Orchestrator
 - Strategy pattern: SingleAgent, Router, Pipeline, Parallel
 - Frozen immutable contexts
@@ -53,6 +54,7 @@ https://github.com/user-attachments/assets/d9672714-ce9a-4b41-bd8c-1448c04f6d6a
 <td width="33%" valign="top">
 
 ### Enterprise Middleware
+
 - Circuit breakers on all external calls
 - Rate limiting per endpoint
 - API key authentication
@@ -63,6 +65,7 @@ https://github.com/user-attachments/assets/d9672714-ce9a-4b41-bd8c-1448c04f6d6a
 <td width="33%" valign="top">
 
 ### LLM & Integrations
+
 - OpenAI, Azure, Ollama, vLLM
 - HuggingFace local models (4/8-bit)
 - MCP tool integration
@@ -129,12 +132,12 @@ cp .env.example .env
 docker compose up --build
 ```
 
-| Service | URL | Purpose |
-|:--------|:----|:--------|
-| **Open WebUI** | [`http://localhost:3000`](http://localhost:3000) | Chat interface |
+| Service           | URL                                              | Purpose              |
+| :---------------- | :----------------------------------------------- | :------------------- |
+| **Open WebUI**    | [`http://localhost:3000`](http://localhost:3000) | Chat interface       |
 | **Barongsai API** | [`http://localhost:8000`](http://localhost:8000) | Search agent backend |
-| **PostgreSQL** | `localhost:5432` | Persistent storage |
-| **Redis** | `localhost:6379` | Caching layer |
+| **PostgreSQL**    | `localhost:5432`                                 | Persistent storage   |
+| **Redis**         | `localhost:6379`                                 | Caching layer        |
 
 Open WebUI is pre-configured to connect to Barongsai. Once all containers are healthy, open [`http://localhost:3000`](http://localhost:3000) and start chatting.
 
@@ -142,11 +145,13 @@ Open WebUI is pre-configured to connect to Barongsai. Once all containers are he
 <summary><b>Configuration options</b></summary>
 
 **Run the example app instead:**
+
 ```
 BGS_APP_MODULE=src.applications.example_app.main:app
 ```
 
 **Customize database credentials:**
+
 ```
 POSTGRES_USER=barongsai
 POSTGRES_PASSWORD=barongsai
@@ -209,10 +214,10 @@ graph TD
     style Tools fill:#6366f1,stroke:#4f46e5,color:#fff
 ```
 
-| Directory | Purpose |
-|:----------|:--------|
-| `src/core/` | Generic framework — interfaces, models, orchestrator, server, middleware |
-| `src/applications/` | Concrete apps built on the core framework |
+| Directory           | Purpose                                                                  |
+| :------------------ | :----------------------------------------------------------------------- |
+| `src/core/`         | Generic framework — interfaces, models, orchestrator, server, middleware |
+| `src/applications/` | Concrete apps built on the core framework                                |
 
 Dependencies are unidirectional: `applications -> core`, never `core -> applications`.
 
@@ -226,23 +231,23 @@ Dependencies are unidirectional: `applications -> core`, never `core -> applicat
 
 > Perplexity-style search chatbot — the flagship application.
 
-| Feature | Description |
-|:--------|:------------|
-| **Query Analysis** | Classifies queries as search vs. direct answer |
-| **Web Research** | Parallel search via DuckDuckGo (free) or Brave (API key) |
-| **Synthesis** | LLM-powered answers with clickable markdown citations |
-| **Streaming** | Real-time token streaming via SSE |
-| **OpenAI API** | Drop-in `/v1/chat/completions` endpoint |
+| Feature            | Description                                              |
+| :----------------- | :------------------------------------------------------- |
+| **Query Analysis** | Classifies queries as search vs. direct answer           |
+| **Web Research**   | Parallel search via DuckDuckGo (free) or Brave (API key) |
+| **Synthesis**      | LLM-powered answers with clickable markdown citations    |
+| **Streaming**      | Real-time token streaming via SSE                        |
+| **OpenAI API**     | Drop-in `/v1/chat/completions` endpoint                  |
 
 **Endpoints:**
 
-| Method | Path | Description |
-|:-------|:-----|:------------|
-| `POST` | `/api/search` | Search with cited synthesis |
-| `POST` | `/api/search/stream` | Streaming search with SSE |
-| `POST` | `/v1/chat/completions` | OpenAI-compatible API |
-| `GET` | `/v1/models` | List available models |
-| `GET` | `/health` | Health check |
+| Method | Path                   | Description                 |
+| :----- | :--------------------- | :-------------------------- |
+| `POST` | `/api/search`          | Search with cited synthesis |
+| `POST` | `/api/search/stream`   | Streaming search with SSE   |
+| `POST` | `/v1/chat/completions` | OpenAI-compatible API       |
+| `GET`  | `/v1/models`           | List available models       |
+| `GET`  | `/health`              | Health check                |
 
 ### Example App
 
