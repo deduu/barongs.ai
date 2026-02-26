@@ -12,7 +12,7 @@ WORKDIR /app
 
 FROM base AS deps
 COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[rag]"
 
 # ── Stage 3: Final image ────────────────────────────────────
 FROM deps AS app

@@ -112,6 +112,98 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
     )
     fastapi_app.include_router(router)
 
+    # --- RAG (optional) ---
+    if settings.rag_enabled:
+        from src.applications.search_agent.agents.rag_synthesizer import RAGSynthesizerAgent
+        from src.applications.search_agent.rag_routes import create_rag_router
+        from src.core.rag.models import RAGConfig
+        from src.core.rag.retriever import HybridRetriever
+
+        rag_synthesizer = RAGSynthesizerAgent(llm_provider=llm, model=settings.llm_model)
+
+        # Embedder
+        embedding_api_key = settings.rag_embedding_api_key or settings.llm_api_key
+        if settings.rag_embedding_provider == "sentence_transformer":
+            from src.core.rag.providers.embedders.sentence_transformer import (
+                SentenceTransformerEmbedder,
+            )
+
+            rag_embedder = SentenceTransformerEmbedder(model_name=settings.rag_embedding_model)
+        else:
+            from src.core.rag.providers.embedders.openai import OpenAIEmbedder
+
+            rag_embedder = OpenAIEmbedder(
+                api_key=embedding_api_key,
+                model=settings.rag_embedding_model,
+                base_url=settings.rag_embedding_base_url,
+                dimension=settings.rag_embedding_dimension,
+            )
+
+        # Vector store
+        if settings.rag_vector_store == "qdrant":
+            from src.core.rag.providers.vector_stores.qdrant import QdrantVectorStore
+
+            rag_vector_store = QdrantVectorStore(
+                collection_name=settings.rag_qdrant_collection,
+                dimension=settings.rag_embedding_dimension,
+                url=settings.rag_qdrant_url,
+                api_key=settings.rag_qdrant_api_key,
+            )
+        else:
+            from src.core.rag.providers.vector_stores.faiss import FAISSVectorStore
+
+            rag_vector_store = FAISSVectorStore(dimension=settings.rag_embedding_dimension)
+
+        # Sparse retriever
+        rag_sparse = None
+        if settings.rag_sparse_retriever == "bm25":
+            from src.core.rag.providers.sparse_retrievers.bm25 import BM25Retriever
+
+            rag_sparse = BM25Retriever()
+
+        # Reranker
+        rag_reranker = None
+        if settings.rag_reranker == "cross_encoder":
+            from src.core.rag.providers.rerankers.cross_encoder import CrossEncoderReranker
+
+            rag_reranker = CrossEncoderReranker(
+                model_name=settings.rag_reranker_model or None,
+            )
+        elif settings.rag_reranker == "cohere":
+            from src.core.rag.providers.rerankers.cohere import CohereReranker
+
+            rag_reranker = CohereReranker(
+                api_key=settings.rag_cohere_api_key,
+                model=settings.rag_reranker_model or None,
+            )
+
+        rag_config = RAGConfig(
+            dense_weight=settings.rag_dense_weight,
+            sparse_weight=settings.rag_sparse_weight,
+            dense_top_k=settings.rag_dense_top_k,
+            sparse_top_k=settings.rag_sparse_top_k,
+            rerank_top_k=settings.rag_rerank_top_k,
+            enable_reranker=settings.rag_reranker != "none",
+        )
+
+        hybrid_retriever = HybridRetriever(
+            embedder=rag_embedder,
+            vector_store=rag_vector_store,
+            sparse_retriever=rag_sparse,
+            reranker=rag_reranker,
+            config=rag_config,
+        )
+
+        rag_router = create_rag_router(
+            settings,
+            retriever=hybrid_retriever,
+            synthesizer=rag_synthesizer,
+            chunk_size=settings.rag_chunk_size,
+            chunk_overlap=settings.rag_chunk_overlap,
+            max_file_size_mb=settings.rag_max_file_size_mb,
+        )
+        fastapi_app.include_router(rag_router)
+
     # --- OpenAI-compatible API (for Open WebUI) ---
     streamable_pipeline = StreamableSearchPipeline(web_researcher, synthesizer)
     model_registry = ModelRegistry()
