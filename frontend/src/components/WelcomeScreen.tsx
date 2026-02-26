@@ -8,6 +8,11 @@ import {
   FileIcon,
   GlobeIcon,
   SearchIcon,
+  SlackIcon,
+  MailIcon,
+  CalendarIcon,
+  GitHubIcon,
+  NotionIcon,
 } from "./icons";
 
 interface WelcomeScreenProps {
@@ -22,12 +27,12 @@ const actionChips = [
   { icon: SearchIcon, label: "More" },
 ];
 
-const toolDots = [
-  { color: "#3b82f6", label: "Slack" },
-  { color: "#ef4444", label: "Gmail" },
-  { color: "#f59e0b", label: "Calendar" },
-  { color: "#10b981", label: "GitHub" },
-  { color: "#8b5cf6", label: "Notion" },
+const toolItems = [
+  { icon: SlackIcon, color: "#3b82f6", label: "Slack" },
+  { icon: MailIcon, color: "#ef4444", label: "Gmail" },
+  { icon: CalendarIcon, color: "#f59e0b", label: "Calendar" },
+  { icon: GitHubIcon, color: "#10b981", label: "GitHub" },
+  { icon: NotionIcon, color: "#8b5cf6", label: "Notion" },
 ];
 
 export default function WelcomeScreen({ onSend }: WelcomeScreenProps) {
@@ -124,17 +129,14 @@ export default function WelcomeScreen({ onSend }: WelcomeScreenProps) {
           Connect your tools to Barongsai
         </span>
         <div className="flex items-center gap-2">
-          {toolDots.map(({ color, label }) => (
+          {toolItems.map(({ icon: Icon, color, label }) => (
             <div
               key={label}
-              className="flex h-7 w-7 items-center justify-center rounded-full border"
-              style={{ borderColor: "var(--border)" }}
+              className="flex h-8 w-8 items-center justify-center rounded-full border transition-colors hover:bg-[var(--surface-2)]"
+              style={{ borderColor: "var(--border)", color }}
               title={label}
             >
-              <div
-                className="h-3 w-3 rounded-full"
-                style={{ background: color }}
-              />
+              <Icon size={15} />
             </div>
           ))}
         </div>
