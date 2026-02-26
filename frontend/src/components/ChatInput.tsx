@@ -1,12 +1,21 @@
 import { useCallback, useRef, useState } from "react";
+import type { ChatMode } from "../types";
 import { SendIcon, PlusIcon } from "./icons";
+import RAGModeToggle from "./RAGModeToggle";
 
 interface ChatInputProps {
   disabled: boolean;
+  chatMode: ChatMode;
+  onChatModeChange: (mode: ChatMode) => void;
   onSend: (text: string) => void;
 }
 
-export default function ChatInput({ disabled, onSend }: ChatInputProps) {
+export default function ChatInput({
+  disabled,
+  chatMode,
+  onChatModeChange,
+  onSend,
+}: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [charCount, setCharCount] = useState(0);
 
@@ -51,7 +60,11 @@ export default function ChatInput({ disabled, onSend }: ChatInputProps) {
               ref={textareaRef}
               className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-[var(--text-muted)]"
               style={{ color: "var(--text)", minHeight: 44, maxHeight: 200, fontFamily: "inherit" }}
-              placeholder="Ask anything..."
+              placeholder={
+                chatMode === "rag"
+                  ? "Ask about your documents..."
+                  : "Ask anything..."
+              }
               rows={1}
               disabled={disabled}
               onInput={autoResize}
@@ -64,7 +77,7 @@ export default function ChatInput({ disabled, onSend }: ChatInputProps) {
             className="flex items-center justify-between border-t px-3 py-2"
             style={{ borderColor: "var(--border)" }}
           >
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <button
                 className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
                 style={{ color: "var(--text-muted)" }}
@@ -73,6 +86,7 @@ export default function ChatInput({ disabled, onSend }: ChatInputProps) {
               >
                 <PlusIcon size={18} />
               </button>
+              <RAGModeToggle mode={chatMode} onChange={onChatModeChange} />
               {charCount > 100 && (
                 <span
                   className="text-[10px] tabular-nums"

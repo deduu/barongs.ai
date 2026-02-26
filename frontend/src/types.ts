@@ -1,10 +1,18 @@
 export type ThemeMode = "dark" | "light" | "system";
 
+export type ChatMode = "search" | "rag";
+
 export interface Source {
   url: string;
   title?: string;
   snippet?: string;
   content?: string;
+}
+
+export interface RAGDocument {
+  id: string;
+  content: string;
+  metadata: Record<string, unknown>;
 }
 
 export type MessageStatus = "streaming" | "done" | "error";

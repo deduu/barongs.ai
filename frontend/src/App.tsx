@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Source } from "./types";
+import type { ChatMode, Source } from "./types";
 import { getString, setItem } from "./lib/storage";
 import { useTheme } from "./hooks/useTheme";
 import { useConversations } from "./hooks/useConversations";
 import { useModels } from "./hooks/useModels";
 import { useStreamSearch } from "./hooks/useStreamSearch";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import Sidebar from "./components/Sidebar";
+import { useRAG } from "./hooks/useRAG";
+import Sidebar, { type ActivePage } from "./components/Sidebar";
 import MessageList from "./components/MessageList";
 import ChatInput from "./components/ChatInput";
 import SourcePanel from "./components/SourcePanel";
 import SettingsModal from "./components/SettingsModal";
 import WelcomeScreen from "./components/WelcomeScreen";
+import KnowledgeBase from "./components/KnowledgeBase";
 import {
   MenuIcon,
   MoonIcon,
@@ -63,13 +65,23 @@ export default function App() {
   const { models, selectedModel, setSelectedModel, refreshModels } =
     useModels(apiKey);
 
+  /* ── Chat mode (search / rag) ──────────────────────────────── */
+  const [chatMode, setChatMode] = useState<ChatMode>("search");
+
   /* ── Streaming ─────────────────────────────────────────────── */
   const { isStreaming, statusMessage, send } = useStreamSearch({
     apiKey,
     currentConvId,
+    chatMode,
     setMessages,
     onComplete: saveCurrentConversation,
   });
+
+  /* ── RAG document management ────────────────────────────────── */
+  const rag = useRAG({ apiKey });
+
+  /* ── Page navigation ─────────────────────────────────────────── */
+  const [activePage, setActivePage] = useState<ActivePage>("chat");
 
   /* ── Mobile detection ──────────────────────────────────────── */
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -115,6 +127,7 @@ export default function App() {
   useKeyboardShortcuts({
     onNewChat: () => {
       newChat();
+      setActivePage("chat");
       if (isMobile) setSidebarOpen(false);
     },
     onOpenSettings: () => setSettingsOpen(true),
@@ -131,7 +144,15 @@ export default function App() {
     [send],
   );
 
-  const showWelcome = messages.length === 0;
+  const handleNavigate = useCallback(
+    (page: ActivePage) => {
+      setActivePage(page);
+      if (isMobile) setSidebarOpen(false);
+    },
+    [isMobile],
+  );
+
+  const showWelcome = messages.length === 0 && activePage === "chat";
 
   /* ── Render ────────────────────────────────────────────────── */
   return (
@@ -143,12 +164,15 @@ export default function App() {
         isMobile={isMobile}
         conversations={conversations}
         currentConvId={currentConvId}
+        activePage={activePage}
         onNewChat={() => {
           newChat();
+          setActivePage("chat");
           if (isMobile) setSidebarOpen(false);
         }}
         onLoadConversation={(id) => {
           loadConversation(id);
+          setActivePage("chat");
           if (isMobile) setSidebarOpen(false);
         }}
         onDeleteConversation={deleteConversation}
@@ -156,6 +180,7 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onClose={() => setSidebarOpen(false)}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onNavigate={handleNavigate}
       />
 
       {/* Main area */}
@@ -250,8 +275,19 @@ export default function App() {
           </div>
         </header>
 
-        {showWelcome ? (
-          <WelcomeScreen onSend={handleQuickSend} />
+        {activePage === "knowledge-base" ? (
+          <KnowledgeBase
+            documents={rag.documents}
+            isLoading={rag.isLoading}
+            isIngesting={rag.isIngesting}
+            error={rag.error}
+            onUploadFile={rag.uploadFile}
+            onUploadText={rag.uploadText}
+            onDelete={rag.removeDocument}
+            onRefresh={rag.refresh}
+          />
+        ) : showWelcome ? (
+          <WelcomeScreen onSend={handleQuickSend} chatMode={chatMode} onChatModeChange={setChatMode} />
         ) : (
           <>
             <MessageList
@@ -261,7 +297,12 @@ export default function App() {
               selectedModel={selectedModel}
               onSourceClick={openSource}
             />
-            <ChatInput disabled={isStreaming} onSend={send} />
+            <ChatInput
+              disabled={isStreaming}
+              chatMode={chatMode}
+              onChatModeChange={setChatMode}
+              onSend={send}
+            />
           </>
         )}
       </main>

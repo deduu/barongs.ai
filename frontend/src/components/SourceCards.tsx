@@ -1,8 +1,13 @@
 import { useState } from "react";
 import type { Source } from "../types";
-import { ChevronDownIcon } from "./icons";
+import { BookIcon, ChevronDownIcon } from "./icons";
+
+function isRAGSource(url: string): boolean {
+  return url.startsWith("rag://");
+}
 
 function getFaviconUrl(url: string): string {
+  if (isRAGSource(url)) return "";
   try {
     return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=16`;
   } catch {
@@ -11,6 +16,7 @@ function getFaviconUrl(url: string): string {
 }
 
 function getDomain(url: string): string {
+  if (isRAGSource(url)) return "Knowledge Base";
   try {
     return new URL(url).hostname.replace("www.", "");
   } catch {
@@ -44,14 +50,18 @@ export default function SourceCards({ sources, onSourceClick }: SourceCardsProps
             onClick={() => onSourceClick(src)}
             aria-label={`Source: ${src.title || getDomain(src.url)}`}
           >
-            <img
-              src={getFaviconUrl(src.url)}
-              alt=""
-              className="h-4 w-4 flex-shrink-0 rounded"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
+            {isRAGSource(src.url) ? (
+              <BookIcon size={16} className="flex-shrink-0 opacity-60" />
+            ) : (
+              <img
+                src={getFaviconUrl(src.url)}
+                alt=""
+                className="h-4 w-4 flex-shrink-0 rounded"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            )}
             <div className="min-w-0 flex-1">
               <div className="truncate font-medium" style={{ color: "var(--text)" }}>
                 {src.title || getDomain(src.url)}

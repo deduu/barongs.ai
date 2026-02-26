@@ -1,18 +1,32 @@
 import { useCallback, useRef, useState } from "react";
-import type { Message, Source } from "../types";
-import { streamSearch, type StreamEvent } from "../lib/api";
+import type { ChatMode, Message, Source } from "../types";
+import { streamSearch, type RAGSourceData, type StreamEvent } from "../lib/api";
 import { escapeUserHtml, renderFinal, renderStreaming } from "../lib/markdown";
 
 interface UseStreamSearchOptions {
   apiKey: string;
   currentConvId: string | null;
+  chatMode: ChatMode;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   onComplete: () => void;
+}
+
+/** Convert a RAG source event into the frontend Source shape. */
+function ragSourceToSource(data: StreamEvent["data"]): Source {
+  const title =
+    (data.metadata?.title as string) ?? data.id ?? "Knowledge Base";
+  return {
+    url: `rag://${data.id ?? "doc"}`,
+    title,
+    snippet: data.content?.slice(0, 200) ?? "",
+    content: data.content,
+  };
 }
 
 export function useStreamSearch({
   apiKey,
   currentConvId,
+  chatMode,
   setMessages,
   onComplete,
 }: UseStreamSearchOptions) {
@@ -46,7 +60,9 @@ export function useStreamSearch({
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
-      setStatusMessage("Searching\u2026");
+      setStatusMessage(
+        chatMode === "rag" ? "Searching knowledge base\u2026" : "Searching\u2026",
+      );
 
       // Accumulate sources in a local ref to avoid stale closures
       const sourcesAccum: Source[] = [];
@@ -64,10 +80,15 @@ export function useStreamSearch({
           case "status":
             setStatusMessage(event.data.message ?? "");
             break;
-          case "source":
-            sourcesAccum.push(event.data as Source);
+          case "source": {
+            const src =
+              chatMode === "rag"
+                ? ragSourceToSource(event.data)
+                : (event.data as Source);
+            sourcesAccum.push(src);
             updateAssistant(() => ({ sources: [...sourcesAccum] }));
             break;
+          }
           case "chunk":
             updateAssistant((m) => {
               const content = m.content + (event.data.text ?? "");
@@ -77,12 +98,24 @@ export function useStreamSearch({
               };
             });
             break;
-          case "done":
+          case "done": {
+            const doneSources =
+              chatMode === "rag"
+                ? (event.data.rag_sources as RAGSourceData[] | undefined)?.map(
+                    (rs) =>
+                      ragSourceToSource({
+                        id: rs.id,
+                        content: rs.content,
+                        score: rs.score,
+                        source: rs.source,
+                        metadata: rs.metadata,
+                      }),
+                  )
+                : event.data.sources;
             updateAssistant((m) => {
               const content = event.data.response ?? m.content;
-              const sources = event.data.sources?.length
-                ? event.data.sources
-                : m.sources;
+              const sources =
+                doneSources && doneSources.length > 0 ? doneSources : m.sources;
               return {
                 content,
                 sources,
@@ -91,6 +124,7 @@ export function useStreamSearch({
               };
             });
             break;
+          }
           case "error":
             updateAssistant(() => ({
               content: event.data.message ?? "An error occurred",
@@ -133,9 +167,10 @@ export function useStreamSearch({
         handleEvent,
         handleDone,
         handleError,
+        chatMode,
       );
     },
-    [isStreaming, apiKey, currentConvId, setMessages, onComplete],
+    [isStreaming, apiKey, currentConvId, chatMode, setMessages, onComplete],
   );
 
   const abort = useCallback(() => {

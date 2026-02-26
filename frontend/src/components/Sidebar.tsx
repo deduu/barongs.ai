@@ -16,12 +16,15 @@ import {
   LayersIcon,
 } from "./icons";
 
+export type ActivePage = "chat" | "knowledge-base";
+
 interface SidebarProps {
   open: boolean;
   collapsed: boolean;
   isMobile: boolean;
   conversations: Conversation[];
   currentConvId: string | null;
+  activePage: ActivePage;
   onNewChat: () => void;
   onLoadConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
@@ -29,26 +32,36 @@ interface SidebarProps {
   onOpenSettings: () => void;
   onClose: () => void;
   onToggleCollapse: () => void;
+  onNavigate: (page: ActivePage) => void;
 }
 
-/* Simple nav link for placeholder items */
+/* Simple nav link */
 function NavLink({
   icon: Icon,
   label,
   badge,
   collapsed,
+  active,
+  onClick,
 }: {
   icon: React.ComponentType<{ size: number; className?: string }>;
   label: string;
   badge?: string;
   collapsed: boolean;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <div
       className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors hover:bg-[var(--surface-2)]"
-      style={{ color: "var(--text-secondary)" }}
+      style={{
+        color: active ? "var(--text)" : "var(--text-secondary)",
+        background: active ? "var(--accent-dim)" : undefined,
+      }}
       role="button"
       tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === "Enter" && onClick) onClick(); }}
     >
       <Icon size={16} className="flex-shrink-0" />
       {!collapsed && (
@@ -74,6 +87,7 @@ export default function Sidebar({
   isMobile,
   conversations,
   currentConvId,
+  activePage,
   onNewChat,
   onLoadConversation,
   onDeleteConversation,
@@ -81,6 +95,7 @@ export default function Sidebar({
   onOpenSettings,
   onClose,
   onToggleCollapse,
+  onNavigate,
 }: SidebarProps) {
   const [search, setSearch] = useState("");
 
@@ -187,8 +202,20 @@ export default function Sidebar({
         {isExpanded && (
           <div className="px-2.5 pt-3">
             <NavLink icon={SparklesIcon} label="Agents" badge="3" collapsed={false} />
-            <NavLink icon={GlobeIcon} label="Search" collapsed={false} />
-            <NavLink icon={LayersIcon} label="Library" collapsed={false} />
+            <NavLink
+              icon={GlobeIcon}
+              label="Search"
+              collapsed={false}
+              active={activePage === "chat"}
+              onClick={() => onNavigate("chat")}
+            />
+            <NavLink
+              icon={LayersIcon}
+              label="Library"
+              collapsed={false}
+              active={activePage === "knowledge-base"}
+              onClick={() => onNavigate("knowledge-base")}
+            />
           </div>
         )}
 

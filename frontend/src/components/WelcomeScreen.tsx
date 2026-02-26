@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import type { ChatMode } from "../types";
 import {
   SendIcon,
   PlusIcon,
@@ -14,9 +15,12 @@ import {
   GitHubIcon,
   NotionIcon,
 } from "./icons";
+import RAGModeToggle from "./RAGModeToggle";
 
 interface WelcomeScreenProps {
   onSend: (text: string) => void;
+  chatMode: ChatMode;
+  onChatModeChange: (mode: ChatMode) => void;
 }
 
 const actionChips = [
@@ -35,7 +39,7 @@ const toolItems = [
   { icon: NotionIcon, color: "#8b5cf6", label: "Notion" },
 ];
 
-export default function WelcomeScreen({ onSend }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onSend, chatMode, onChatModeChange }: WelcomeScreenProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = useCallback(() => {
@@ -76,7 +80,7 @@ export default function WelcomeScreen({ onSend }: WelcomeScreenProps) {
               ref={inputRef}
               className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-[var(--text-muted)]"
               style={{ color: "var(--text)", minHeight: 60, maxHeight: 160, fontFamily: "inherit" }}
-              placeholder="Ask anything..."
+              placeholder={chatMode === "rag" ? "Ask about your documents..." : "Ask anything..."}
               rows={2}
               onKeyDown={handleKeyDown}
               onInput={() => {
@@ -93,7 +97,7 @@ export default function WelcomeScreen({ onSend }: WelcomeScreenProps) {
             className="flex items-center justify-between border-t px-3 py-2"
             style={{ borderColor: "var(--border)" }}
           >
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <button
                 className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
                 style={{ color: "var(--text-muted)" }}
@@ -102,6 +106,7 @@ export default function WelcomeScreen({ onSend }: WelcomeScreenProps) {
               >
                 <PlusIcon size={18} />
               </button>
+              <RAGModeToggle mode={chatMode} onChange={onChatModeChange} />
               <button
                 className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
                 style={{ color: "var(--text-muted)" }}
