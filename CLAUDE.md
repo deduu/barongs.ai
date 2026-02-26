@@ -35,8 +35,15 @@ pattern for orchestration and a modular application structure.
 1. **TDD: Write tests BEFORE implementation** for agents, tools, orchestrator.
    - Test file must exist and have failing tests before the implementation file.
 2. **Plan mode for multi-file changes.** If a change touches 3+ files, use
-   plan mode first to outline the approach.
+   plan mode first. If something goes sideways, STOP and re-plan immediately.
 3. **Use TodoWrite** for task decomposition on complex features.
+4. **Verify before done.** Never mark a task complete without proving it works.
+   Run tests, check logs, diff behavior. Ask: "Would a staff engineer approve this?"
+5. **Autonomous bug fixing.** Given a bug report, go fix it — point at logs,
+   errors, and failing tests, then resolve them without hand-holding.
+6. **Learn from corrections.** After any user correction, record the lesson in
+   `tasks/lessons.md` with a rule that prevents the same mistake. Review at
+   session start.
 
 ## Architecture
 - `src/core/` — Framework library (interfaces, models, orchestrator, server)
@@ -48,6 +55,13 @@ pattern for orchestration and a modular application structure.
 - Tools NEVER access memory directly — memory is injected via AgentContext
 - All external I/O goes through the tools layer, never directly in agents
 - Dependencies are unidirectional: applications → core, never core → applications
+
+## Core Principles
+- **Simplicity first.** Make every change as simple as possible. Minimal code.
+- **Root causes, not band-aids.** No temporary fixes. Senior developer standards.
+- **Minimal impact.** Changes touch only what's necessary. Avoid introducing bugs.
+- **Elegance when it matters.** For non-trivial changes, pause and ask "is there
+  a more elegant way?" Skip this for simple, obvious fixes.
 
 ## Code Style
 - Absolute imports from `src.` prefix
