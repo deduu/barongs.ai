@@ -3,6 +3,7 @@ from __future__ import annotations
 from src.core.orchestrator.strategies import (
     ParallelStrategy,
     PipelineStrategy,
+    PipelineWithMetadataStrategy,
     RouterStrategy,
     SingleAgentStrategy,
 )
@@ -10,6 +11,7 @@ from src.core.orchestrator.strategies import (
 __all__ = [
     "ParallelStrategy",
     "PipelineStrategy",
+    "PipelineWithMetadataStrategy",
     "RouterStrategy",
     "SingleAgentStrategy",
 ]
