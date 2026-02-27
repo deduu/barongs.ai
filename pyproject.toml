@@ -59,6 +59,7 @@ rag = [
     "qdrant-client>=1.7.0",
     "faiss-cpu>=1.7.0",
     "rank-bm25>=0.2.2",
+    "asyncpg>=0.29.0",
 ]
 rag-local = [
     "barongsai[rag]",
@@ -175,6 +176,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "numpy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "asyncpg.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
