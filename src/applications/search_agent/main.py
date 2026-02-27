@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -25,10 +27,15 @@ from src.core.orchestrator.strategies.single_agent import SingleAgentStrategy
 from src.core.server.factory import create_app
 from src.core.server.openai_compat import ModelRegistry, create_openai_router
 
+logger = logging.getLogger(__name__)
+
 
 def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
     """Composition root: wire agents, tools, LLM, memory, orchestrator, and routes."""
     settings = settings or SearchAgentSettings()
+
+    startup_hooks: list[Callable[[], Awaitable[None]]] = []
+    shutdown_hooks: list[Callable[[], Awaitable[None]]] = []
 
     # --- LLM Setup ---
     registry = LLMProviderRegistry()
@@ -78,6 +85,33 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
     )
     url_validator = URLValidatorTool()
 
+    # --- Memory (session persistence) ---
+    if settings.redis_url:
+        import redis.asyncio as aioredis
+
+        from src.applications.search_agent.memory.redis_conversation_memory import (
+            RedisConversationMemory,
+        )
+
+        redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+        conversation_memory = RedisConversationMemory(
+            client=redis_client,
+            window_size=settings.conversation_window_size,
+        )
+        logger.info("Using Redis-backed conversation memory (%s)", settings.redis_url)
+
+        async def _close_redis() -> None:
+            await redis_client.aclose()
+
+        shutdown_hooks.append(_close_redis)
+    else:
+        from src.applications.search_agent.memory.conversation_memory import ConversationMemory
+
+        conversation_memory = ConversationMemory(  # type: ignore[assignment]
+            window_size=settings.conversation_window_size,
+        )
+        logger.info("Using in-memory conversation memory (no Redis URL configured)")
+
     # --- Agents ---
     query_analyzer = QueryAnalyzerAgent(llm_provider=llm, model=settings.llm_model)
     web_researcher = WebResearcherAgent(
@@ -102,17 +136,8 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         timeout_seconds=settings.agent_timeout_seconds,
     )
 
-    # --- FastAPI App ---
-    fastapi_app = create_app(settings)
-    router = create_router(
-        orchestrator,
-        settings,
-        web_researcher=web_researcher,
-        synthesizer=synthesizer,
-    )
-    fastapi_app.include_router(router)
-
     # --- RAG (optional) ---
+    rag_router = None
     if settings.rag_enabled:
         from src.applications.search_agent.agents.rag_synthesizer import RAGSynthesizerAgent
         from src.applications.search_agent.rag_routes import create_rag_router
@@ -194,14 +219,47 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
             config=rag_config,
         )
 
+        # Wrap with PostgreSQL persistence if database_url is configured
+        rag_retriever: HybridRetriever | object = hybrid_retriever
+        if settings.database_url:
+            from src.core.rag.persistence.pg_document_store import PgDocumentStore
+            from src.core.rag.persistent_retriever import PersistentHybridRetriever
+
+            pg_store = PgDocumentStore(database_url=settings.database_url)
+            persistent_retriever = PersistentHybridRetriever(
+                retriever=hybrid_retriever, store=pg_store
+            )
+            rag_retriever = persistent_retriever
+            startup_hooks.append(persistent_retriever.initialize)
+            shutdown_hooks.append(persistent_retriever.close)
+            logger.info("RAG persistence enabled via PostgreSQL")
+        else:
+            logger.info("RAG running in-memory (no database_url configured)")
+
         rag_router = create_rag_router(
             settings,
-            retriever=hybrid_retriever,
+            retriever=rag_retriever,  # type: ignore[arg-type]
             synthesizer=rag_synthesizer,
             chunk_size=settings.rag_chunk_size,
             chunk_overlap=settings.rag_chunk_overlap,
             max_file_size_mb=settings.rag_max_file_size_mb,
         )
+
+    # --- FastAPI App ---
+    fastapi_app = create_app(
+        settings,
+        on_startup=startup_hooks,
+        on_shutdown=shutdown_hooks,
+    )
+    router = create_router(
+        orchestrator,
+        settings,
+        web_researcher=web_researcher,
+        synthesizer=synthesizer,
+    )
+    fastapi_app.include_router(router)
+
+    if rag_router is not None:
         fastapi_app.include_router(rag_router)
 
     # --- OpenAI-compatible API (for Open WebUI) ---

@@ -38,6 +38,9 @@ class SearchAgentSettings(AppSettings):
     mcp_servers: list[str] = Field(default_factory=list)
     skills_md_path: str | None = None
 
+    # Database (PostgreSQL — used for RAG persistence)
+    database_url: str | None = None
+
     # RAG
     rag_enabled: bool = False
     rag_embedding_provider: str = "openai"  # "openai" | "sentence_transformer"

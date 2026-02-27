@@ -15,6 +15,7 @@ from src.core.middleware.auth import create_api_key_dependency
 from src.core.models.config import AppSettings
 from src.core.models.context import AgentContext
 from src.core.rag.chunker import chunk_text
+from src.core.rag.persistent_retriever import PersistentHybridRetriever
 from src.core.rag.retriever import HybridRetriever
 
 # --- Request / Response models ---
@@ -70,7 +71,7 @@ class RAGChatRequest(BaseModel):
 def create_rag_router(
     settings: AppSettings,
     *,
-    retriever: HybridRetriever,
+    retriever: HybridRetriever | PersistentHybridRetriever,
     synthesizer: RAGSynthesizerAgent,
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
