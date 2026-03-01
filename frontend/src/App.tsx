@@ -308,6 +308,7 @@ export default function App() {
             isLoading={rag.isLoading}
             isIngesting={rag.isIngesting}
             error={rag.error}
+            apiKey={bearerToken}
             onUploadFile={rag.uploadFile}
             onUploadText={rag.uploadText}
             onDelete={rag.removeDocument}

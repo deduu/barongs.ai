@@ -190,6 +190,18 @@ export async function listDocuments(
   return data.documents ?? [];
 }
 
+export async function getDocumentChunks(
+  docPrefix: string,
+  apiKey: string,
+): Promise<RAGDocument[]> {
+  const resp = await fetch(`/api/rag/documents/${encodeURIComponent(docPrefix)}/chunks`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!resp.ok) return [];
+  const data = await resp.json();
+  return data.chunks ?? [];
+}
+
 export async function deleteDocument(
   docId: string,
   apiKey: string,
