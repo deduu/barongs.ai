@@ -64,7 +64,11 @@ class UserRepository:
         """Create connection pool and ensure the users table exists."""
         self._pool = await asyncpg.create_pool(dsn=self._dsn)
         async with self._pool.acquire() as conn:
-            await conn.execute(_CREATE_TABLE)
+            try:
+                await conn.execute(_CREATE_TABLE)
+            except asyncpg.UniqueViolationError:
+                # Race condition: another worker already created the table/type
+                pass
         logger.info("UserRepository initialised (users table ensured)")
 
     async def create_user(
