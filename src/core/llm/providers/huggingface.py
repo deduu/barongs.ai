@@ -109,10 +109,19 @@ class HuggingFaceProvider(LLMProvider):
     def _build_messages(self, request: LLMRequest) -> list[dict[str, str]]:
         """Convert ``LLMRequest`` messages into the list-of-dicts expected by
         ``tokenizer.apply_chat_template()``."""
+        from src.core.llm.errors import LLMProviderError
+
         messages: list[dict[str, str]] = []
         if request.system_prompt:
             messages.append({"role": "system", "content": request.system_prompt})
         for msg in request.messages:
+            if not isinstance(msg.content, str):
+                raise LLMProviderError(
+                    "HuggingFace provider does not support multimodal (image) content. "
+                    "Use an OpenAI or OpenAI-compatible provider for vision tasks.",
+                    provider=self.name,
+                    retryable=False,
+                )
             messages.append({"role": msg.role, "content": msg.content})
         return messages
 

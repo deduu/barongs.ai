@@ -9,7 +9,7 @@ class LLMMessage(BaseModel):
     """A single message in an LLM conversation."""
 
     role: str  # "system" | "user" | "assistant"
-    content: str
+    content: str | list[dict[str, Any]]
 
 
 class LLMRequest(BaseModel):

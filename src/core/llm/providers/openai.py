@@ -51,8 +51,8 @@ class OpenAIProvider(LLMProvider):
     def name(self) -> str:
         return "openai"
 
-    def _build_messages(self, request: LLMRequest) -> list[dict[str, str]]:
-        messages: list[dict[str, str]] = []
+    def _build_messages(self, request: LLMRequest) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
         if request.system_prompt:
             messages.append({"role": "system", "content": request.system_prompt})
         for msg in request.messages:
