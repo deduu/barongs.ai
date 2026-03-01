@@ -63,7 +63,7 @@ async def async_client(
 class TestSearchRoutes:
     async def test_search_endpoint(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/v1/search",
+            "/api/search",
             json={"query": "What is Python?"},
             headers={"X-API-Key": "test-key"},
         )
@@ -75,14 +75,14 @@ class TestSearchRoutes:
 
     async def test_search_requires_auth(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/v1/search",
+            "/api/search",
             json={"query": "test"},
         )
         assert response.status_code == 401
 
     async def test_search_invalid_auth(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/v1/search",
+            "/api/search",
             json={"query": "test"},
             headers={"X-API-Key": "wrong-key"},
         )
@@ -90,7 +90,7 @@ class TestSearchRoutes:
 
     async def test_chat_endpoint(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/v1/chat",
+            "/api/chat",
             json={"message": "Hello!"},
             headers={"X-API-Key": "test-key"},
         )
@@ -100,7 +100,7 @@ class TestSearchRoutes:
 
     async def test_search_validation_error(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/v1/search",
+            "/api/search",
             json={},  # Missing required field
             headers={"X-API-Key": "test-key"},
         )
@@ -124,7 +124,7 @@ class TestStreamErrorHandling:
         transport = ASGITransport(app=app)  # type: ignore[arg-type]
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
-                "/api/v1/search/stream",
+                "/api/search/stream",
                 json={"query": "test"},
                 headers={"X-API-Key": "test-key"},
             )
@@ -159,7 +159,7 @@ class TestStreamErrorHandling:
         transport = ASGITransport(app=app)  # type: ignore[arg-type]
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
-                "/api/v1/search/stream",
+                "/api/search/stream",
                 json={"query": "test"},
                 headers={"X-API-Key": "test-key"},
             )

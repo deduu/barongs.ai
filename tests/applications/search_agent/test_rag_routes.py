@@ -52,7 +52,7 @@ class TestRAGIngestText:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.post(
-                "/api/v1/rag/ingest",
+                "/api/rag/ingest",
                 json={
                     "content": "Hello world. " * 50,
                     "title": "Test Document",
@@ -72,7 +72,7 @@ class TestRAGIngestText:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.post(
-                "/api/v1/rag/ingest",
+                "/api/rag/ingest",
                 json={"content": "   ", "title": "Empty"},
                 headers=_auth_headers(),
             )
@@ -86,7 +86,7 @@ class TestRAGIngestText:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.post(
-                "/api/v1/rag/ingest",
+                "/api/rag/ingest",
                 json={"content": "test", "title": "t"},
             )
 
@@ -103,7 +103,7 @@ class TestRAGIngestFile:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.post(
-                "/api/v1/rag/ingest/file",
+                "/api/rag/ingest/file",
                 files={"file": ("test.txt", b"Hello world content " * 20, "text/plain")},
                 data={"title": "My File"},
                 headers=_auth_headers(),
@@ -124,7 +124,7 @@ class TestRAGIngestFile:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.post(
-                "/api/v1/rag/ingest/file",
+                "/api/rag/ingest/file",
                 files={"file": ("big.txt", big_content, "text/plain")},
                 headers=_auth_headers(),
             )
@@ -154,7 +154,7 @@ class TestRAGSearch:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.post(
-                "/api/v1/rag/search",
+                "/api/rag/search",
                 json={"query": "test query", "top_k": 5},
                 headers=_auth_headers(),
             )
@@ -171,7 +171,7 @@ class TestRAGSearch:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.post(
-                "/api/v1/rag/search",
+                "/api/rag/search",
                 json={"query": "  "},
                 headers=_auth_headers(),
             )
@@ -195,7 +195,7 @@ class TestRAGDocuments:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.get(
-                "/api/v1/rag/documents",
+                "/api/rag/documents",
                 headers=_auth_headers(),
             )
 
@@ -212,7 +212,7 @@ class TestRAGDocuments:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.delete(
-                "/api/v1/rag/documents/doc-123",
+                "/api/rag/documents/doc-123",
                 headers=_auth_headers(),
             )
 
@@ -253,7 +253,7 @@ class TestRAGChatStream:
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             resp = await client.post(
-                "/api/v1/rag/chat/stream",
+                "/api/rag/chat/stream",
                 json={"query": "What is in the KB?"},
                 headers=_auth_headers(),
             )
