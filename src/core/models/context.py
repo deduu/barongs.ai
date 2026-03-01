@@ -25,4 +25,9 @@ class AgentContext(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Multi-tenancy fields (optional for backward compatibility)
+    tenant_id: str | None = None
+    user_id: str | None = None
+    session_id: str | None = None
+
     model_config = {"frozen": True}

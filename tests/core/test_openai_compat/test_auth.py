@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
+from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 from src.core.server.openai_compat.auth import create_bearer_auth_dependency
 
@@ -19,8 +20,8 @@ def _make_app(
     app = FastAPI()
 
     @app.get("/protected")
-    async def protected(token: str = Depends(verify)) -> dict[str, str]:
-        return {"token": token}
+    async def protected(auth: AuthContext = Depends(verify)) -> dict[str, str]:
+        return {"token": auth.api_key, "tenant_id": auth.tenant_id}
 
     return app
 

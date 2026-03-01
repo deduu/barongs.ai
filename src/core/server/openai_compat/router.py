@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
+from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 from src.core.server.openai_compat.auth import create_bearer_auth_dependency
 from src.core.server.openai_compat.converters import (
@@ -38,7 +39,7 @@ def create_openai_router(
 
     @router.get("/models", response_model=ModelListResponse)
     async def list_models(
-        _token: str = Depends(verify_bearer),
+        _auth: AuthContext = Depends(verify_bearer),
     ) -> ModelListResponse:
         models = registry.list_models()
         return ModelListResponse(
@@ -51,7 +52,7 @@ def create_openai_router(
     @router.post("/chat/completions")
     async def chat_completions(
         request: ChatCompletionRequest,
-        _token: str = Depends(verify_bearer),
+        _auth: AuthContext = Depends(verify_bearer),
     ) -> Any:
         try:
             registered = registry.get(request.model)

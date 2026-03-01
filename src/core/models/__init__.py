@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 from src.core.models.context import AgentContext, ToolInput
 from src.core.models.messages import Conversation, Message, Role
@@ -9,6 +10,7 @@ __all__ = [
     "AgentContext",
     "AgentResult",
     "AppSettings",
+    "AuthContext",
     "Conversation",
     "Message",
     "Role",

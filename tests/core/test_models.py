@@ -103,6 +103,62 @@ class TestConversation:
         assert len(conv.messages) == 2
 
 
+class TestAgentContextTenantFields:
+    def test_defaults_to_none(self):
+        ctx = AgentContext(user_message="hello")
+        assert ctx.tenant_id is None
+        assert ctx.user_id is None
+        assert ctx.session_id is None
+
+    def test_with_tenant_fields(self):
+        ctx = AgentContext(
+            user_message="hello",
+            tenant_id="tenant-1",
+            user_id="user-1",
+            session_id="sess-1",
+        )
+        assert ctx.tenant_id == "tenant-1"
+        assert ctx.user_id == "user-1"
+        assert ctx.session_id == "sess-1"
+
+    def test_backward_compat_no_tenant(self):
+        """Existing code constructing AgentContext without tenant fields still works."""
+        ctx = AgentContext(user_message="hello", metadata={"key": "val"})
+        assert ctx.user_message == "hello"
+        assert ctx.metadata == {"key": "val"}
+        assert ctx.tenant_id is None
+
+    def test_frozen_tenant_fields(self):
+        ctx = AgentContext(user_message="hi", tenant_id="t1")
+        with pytest.raises(ValidationError):
+            ctx.tenant_id = "t2"  # type: ignore[misc]
+
+
+class TestAuthContext:
+    def test_defaults(self):
+        from src.core.models.auth import AuthContext
+
+        auth = AuthContext()
+        assert auth.tenant_id == "default"
+        assert auth.api_key == ""
+        assert auth.user_id is None
+        assert auth.scopes == []
+
+    def test_with_all_fields(self):
+        from src.core.models.auth import AuthContext
+
+        auth = AuthContext(
+            tenant_id="acme",
+            api_key="sk-123",
+            user_id="u-1",
+            scopes=["read", "write"],
+        )
+        assert auth.tenant_id == "acme"
+        assert auth.api_key == "sk-123"
+        assert auth.user_id == "u-1"
+        assert auth.scopes == ["read", "write"]
+
+
 class TestAppSettings:
     def test_defaults(self):
         settings = AppSettings()
@@ -115,3 +171,12 @@ class TestAppSettings:
         settings = AppSettings(app_name="custom", debug=True)
         assert settings.app_name == "custom"
         assert settings.debug is True
+
+    def test_api_keys_default_empty(self):
+        settings = AppSettings()
+        assert settings.api_keys == {}
+
+    def test_api_keys_populated(self):
+        settings = AppSettings(api_keys={"sk-abc": "tenant-1", "sk-def": "tenant-2"})
+        assert settings.api_keys["sk-abc"] == "tenant-1"
+        assert settings.api_keys["sk-def"] == "tenant-2"

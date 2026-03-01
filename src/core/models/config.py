@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -23,6 +23,10 @@ class AppSettings(BaseSettings):
 
     # Security
     api_key: str = Field(default="changeme", description="API key for auth")
+    api_keys: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of API key -> tenant_id. Empty = use single api_key as 'default' tenant.",
+    )
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     openai_auth_enabled: bool = False
 
@@ -47,3 +51,17 @@ class AppSettings(BaseSettings):
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
+
+    @model_validator(mode="after")
+    def _validate_production(self) -> AppSettings:
+        if self.environment != "production":
+            return self
+        if self.api_key == "changeme" and not self.api_keys:
+            raise ValueError(
+                "api_key must be changed from default 'changeme' in production"
+            )
+        if "*" in self.cors_origins:
+            raise ValueError(
+                "cors_origins must not contain wildcard '*' in production"
+            )
+        return self

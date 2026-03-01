@@ -5,14 +5,15 @@ from typing import Any
 from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-async def _no_auth() -> str:
+async def _no_auth() -> AuthContext:
     """No-op dependency used when auth is disabled."""
-    return ""
+    return AuthContext(tenant_id="default")
 
 
 def create_bearer_auth_dependency(settings: AppSettings) -> Any:
@@ -27,7 +28,7 @@ def create_bearer_auth_dependency(settings: AppSettings) -> Any:
 
     async def _verify(
         credentials: HTTPAuthorizationCredentials | None = Security(bearer_scheme),  # noqa: B008
-    ) -> str:
+    ) -> AuthContext:
         if credentials is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -39,7 +40,26 @@ def create_bearer_auth_dependency(settings: AppSettings) -> Any:
                     }
                 },
             )
-        if credentials.credentials != settings.api_key:
+        key = credentials.credentials
+
+        # Multi-key mode
+        if settings.api_keys:
+            tenant_id = settings.api_keys.get(key)
+            if tenant_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail={
+                        "error": {
+                            "message": "Invalid API key",
+                            "type": "auth_error",
+                            "code": "invalid_api_key",
+                        }
+                    },
+                )
+            return AuthContext(tenant_id=tenant_id, api_key=key)
+
+        # Single-key mode
+        if key != settings.api_key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
@@ -50,6 +70,6 @@ def create_bearer_auth_dependency(settings: AppSettings) -> Any:
                     }
                 },
             )
-        return credentials.credentials
+        return AuthContext(tenant_id="default", api_key=key)
 
     return _verify
