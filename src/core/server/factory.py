@@ -7,8 +7,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.middleware.logging import setup_logging
+from src.core.middleware.rate_limit_middleware import RateLimitMiddleware
 from src.core.models.config import AppSettings
-from src.core.server.exception_handlers import register_exception_handlers
+from src.core.server.exception_handlers import (
+    GlobalExceptionMiddleware,
+    register_exception_handlers,
+)
 from src.core.server.health import router as health_router
 
 LifecycleHook = Callable[[], Awaitable[None]]
@@ -59,6 +63,12 @@ def create_app(
         allow_headers=["*"],
     )
 
+    app.add_middleware(GlobalExceptionMiddleware)
+    app.add_middleware(
+        RateLimitMiddleware,
+        max_tokens=settings.rate_limit_requests,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
     register_exception_handlers(app)
     app.include_router(health_router)
 
