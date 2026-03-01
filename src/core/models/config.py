@@ -43,6 +43,17 @@ class AppSettings(BaseSettings):
     # Rate limiting
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 60
+    rate_limit_distributed: bool = False
+
+    # HTTP client pool
+    http_max_connections: int = 100
+    http_max_keepalive: int = 20
+    http_max_concurrent_requests: int = 50
+
+    # Job queue
+    job_queue_enabled: bool = False
+    job_result_ttl_seconds: int = 3600
+    job_max_retries: int = 3
 
     # Circuit breaker
     circuit_breaker_failure_threshold: int = 5

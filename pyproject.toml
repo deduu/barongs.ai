@@ -38,6 +38,7 @@ dependencies = [
     "redis>=5.0.0",
     "pyjwt[crypto]>=2.8.0",
     "bcrypt>=4.1.0",
+    "arq>=0.26.0",
 ]
 
 [project.optional-dependencies]
@@ -212,6 +213,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "PIL.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "arq.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
