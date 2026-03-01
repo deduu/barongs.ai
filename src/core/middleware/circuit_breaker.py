@@ -31,10 +31,12 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
         expected_exceptions: tuple[type[Exception], ...] = (Exception,),
+        should_count: Callable[[Exception], bool] | None = None,
     ) -> None:
         self._failure_threshold = failure_threshold
         self._recovery_timeout = recovery_timeout
         self._expected_exceptions = expected_exceptions
+        self._should_count = should_count
         self._failure_count: int = 0
         self._last_failure_time: float = 0.0
         self._state = CircuitState.CLOSED
@@ -56,8 +58,9 @@ class CircuitBreaker:
             result = await func(*args, **kwargs)
             self._on_success()
             return result
-        except self._expected_exceptions:
-            self._on_failure()
+        except self._expected_exceptions as exc:
+            if self._should_count is None or self._should_count(exc):
+                self._on_failure()
             raise
 
     def _on_success(self) -> None:
