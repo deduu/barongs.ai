@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable, Coroutine
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
@@ -16,6 +16,7 @@ from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 from src.core.models.context import AgentContext
 from src.core.rag.chunker import chunk_text
+from src.core.rag.parsers.registry import ParserRegistry
 from src.core.rag.persistent_retriever import PersistentHybridRetriever
 from src.core.rag.retriever import HybridRetriever
 
@@ -74,13 +75,15 @@ def create_rag_router(
     *,
     retriever: HybridRetriever | PersistentHybridRetriever,
     synthesizer: RAGSynthesizerAgent,
+    parser_registry: ParserRegistry | None = None,
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
     max_file_size_mb: int = 10,
+    auth_dependency: Callable[..., Coroutine[Any, Any, AuthContext]] | None = None,
 ) -> APIRouter:
     """Create the RAG API router with auth dependency."""
     router = APIRouter(prefix="/api/rag", tags=["rag"])
-    verify_key = create_api_key_dependency(settings)
+    verify_key = auth_dependency or create_api_key_dependency(settings)
 
     @router.post("/ingest", response_model=IngestResponse)
     async def ingest_text(
@@ -130,7 +133,20 @@ def create_rag_router(
                 detail=f"File exceeds {max_file_size_mb}MB limit.",
             )
 
-        content = raw.decode("utf-8", errors="replace").strip()
+        filename = file.filename or "unknown.txt"
+        if parser_registry is not None:
+            p = parser_registry.get_parser(filename)
+            if p is None:
+                ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
+                supported = sorted(parser_registry.supported_extensions)
+                raise HTTPException(
+                    status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                    detail=f"Unsupported file type: '.{ext}'. Supported: {supported}",
+                )
+            content = (await parser_registry.parse(raw, filename)).strip()
+        else:
+            content = raw.decode("utf-8", errors="replace").strip()
+
         if not content:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

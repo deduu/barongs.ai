@@ -41,6 +41,8 @@ services:
     environment:
       BGS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-barongsai}:${POSTGRES_PASSWORD:-barongsai}@postgres:5432/${POSTGRES_DB:-barongsai}
       BGS_REDIS_URL: redis://:${REDIS_PASSWORD:-barongsai}@redis:6379/0
+      BGS_USER_AUTH_ENABLED: "true"
+      BGS_JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
     volumes:
       - ./src:/app/src
     depends_on:

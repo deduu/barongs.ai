@@ -10,3 +10,4 @@ class AuthContext(BaseModel):
     api_key: str = ""
     user_id: str | None = None
     scopes: list[str] = Field(default_factory=list)
+    auth_method: str = "api_key"

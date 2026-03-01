@@ -30,6 +30,12 @@ class AppSettings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     openai_auth_enabled: bool = False
 
+    # User auth (email + password login)
+    user_auth_enabled: bool = False
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 1440  # 24 hours
+
     # Timeouts
     agent_timeout_seconds: float = 30.0
     tool_timeout_seconds: float = 15.0
@@ -63,5 +69,9 @@ class AppSettings(BaseSettings):
         if "*" in self.cors_origins:
             raise ValueError(
                 "cors_origins must not contain wildcard '*' in production"
+            )
+        if self.user_auth_enabled and not self.jwt_secret_key:
+            raise ValueError(
+                "jwt_secret_key must be set when user_auth_enabled is True"
             )
         return self

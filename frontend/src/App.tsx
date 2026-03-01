@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ChatMode, Source } from "./types";
 import { getString, setItem } from "./lib/storage";
 import { useTheme } from "./hooks/useTheme";
+import { useAuth } from "./hooks/useAuth";
 import { useConversations } from "./hooks/useConversations";
 import { useModels } from "./hooks/useModels";
 import { useStreamSearch } from "./hooks/useStreamSearch";
@@ -14,6 +15,7 @@ import SourcePanel from "./components/SourcePanel";
 import SettingsModal from "./components/SettingsModal";
 import WelcomeScreen from "./components/WelcomeScreen";
 import KnowledgeBase from "./components/KnowledgeBase";
+import LoginPage from "./components/LoginPage";
 import {
   MenuIcon,
   MoonIcon,
@@ -27,7 +29,10 @@ export default function App() {
   /* ── Theme ─────────────────────────────────────────────────── */
   const { theme, setTheme, cycleTheme } = useTheme();
 
-  /* ── API key ───────────────────────────────────────────────── */
+  /* ── Auth ────────────────────────────────────────────────────── */
+  const auth = useAuth();
+
+  /* ── API key (fallback for api_key mode) ─────────────────────── */
   const [apiKey, setApiKeyState] = useState(() =>
     getString("api_key", "changeme"),
   );
@@ -35,6 +40,9 @@ export default function App() {
     setApiKeyState(key);
     setItem("api_key", key);
   }, []);
+
+  // The effective bearer token: JWT when in jwt mode, API key otherwise
+  const bearerToken = auth.mode === "jwt" ? auth.token : apiKey;
 
   /* ── Conversations ─────────────────────────────────────────── */
   const {
@@ -63,14 +71,14 @@ export default function App() {
 
   /* ── Models ────────────────────────────────────────────────── */
   const { models, selectedModel, setSelectedModel, refreshModels } =
-    useModels(apiKey);
+    useModels(bearerToken);
 
   /* ── Chat mode (search / rag) ──────────────────────────────── */
   const [chatMode, setChatMode] = useState<ChatMode>("search");
 
   /* ── Streaming ─────────────────────────────────────────────── */
   const { isStreaming, statusMessage, send } = useStreamSearch({
-    apiKey,
+    apiKey: bearerToken,
     currentConvId,
     chatMode,
     setMessages,
@@ -78,7 +86,7 @@ export default function App() {
   });
 
   /* ── RAG document management ────────────────────────────────── */
-  const rag = useRAG({ apiKey });
+  const rag = useRAG({ apiKey: bearerToken });
 
   /* ── Page navigation ─────────────────────────────────────────── */
   const [activePage, setActivePage] = useState<ActivePage>("chat");
@@ -153,6 +161,25 @@ export default function App() {
   );
 
   const showWelcome = messages.length === 0 && activePage === "chat";
+
+  /* ── Loading state ──────────────────────────────────────────── */
+  if (auth.mode === "loading") {
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center"
+        style={{ background: "var(--bg)" }}
+      >
+        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+          Loading...
+        </span>
+      </div>
+    );
+  }
+
+  /* ── Login gate (JWT mode, not authenticated) ───────────────── */
+  if (auth.mode === "jwt" && !auth.isAuthenticated) {
+    return <LoginPage onLogin={auth.login} onRegister={auth.register} />;
+  }
 
   /* ── Render ────────────────────────────────────────────────── */
   return (
@@ -270,7 +297,7 @@ export default function App() {
               className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold"
               style={{ background: "var(--surface-3)", color: "var(--text-secondary)" }}
             >
-              U
+              {auth.user?.email?.[0]?.toUpperCase() ?? "U"}
             </div>
           </div>
         </header>
@@ -317,8 +344,11 @@ export default function App() {
         open={settingsOpen}
         apiKey={apiKey}
         theme={theme}
+        authMode={auth.mode}
+        userEmail={auth.user?.email ?? null}
         onSetTheme={setTheme}
         onSaveApiKey={handleSaveApiKey}
+        onLogout={auth.logout}
         onClose={() => setSettingsOpen(false)}
       />
     </div>

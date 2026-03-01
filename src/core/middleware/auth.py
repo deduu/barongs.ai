@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -8,6 +9,8 @@ from fastapi.security import APIKeyHeader
 
 from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
+
+logger = logging.getLogger(__name__)
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -77,5 +80,57 @@ def create_api_key_dependency(
                 detail="Invalid API key",
             )
         return AuthContext(tenant_id="default", api_key=key)
+
+    return _verify
+
+
+def create_unified_auth_dependency(
+    settings: AppSettings,
+) -> Callable[..., Coroutine[Any, Any, AuthContext]]:
+    """Create a dependency that tries JWT first, then falls back to API-key.
+
+    JWT tokens are identified by containing dots (``header.payload.signature``).
+    If ``settings.user_auth_enabled`` is False, this behaves identically to
+    ``create_api_key_dependency``.
+    """
+    api_key_dep = create_api_key_dependency(settings)
+
+    async def _verify(
+        request: Request,
+        api_key: str | None = Security(api_key_header),
+    ) -> AuthContext:
+        if not settings.user_auth_enabled:
+            return await api_key_dep(request, api_key)
+
+        # Extract the bearer token (or X-API-Key header)
+        token = _extract_bearer(request) or api_key
+
+        if token is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing authentication credentials",
+            )
+
+        # JWT tokens contain dots; API keys typically do not
+        if "." in token:
+            try:
+                from src.core.auth.jwt import TokenError, decode_access_token
+
+                payload = decode_access_token(
+                    token,
+                    secret_key=settings.jwt_secret_key,
+                    algorithm=settings.jwt_algorithm,
+                )
+                return AuthContext(
+                    tenant_id=payload.get("tenant_id", "default"),
+                    user_id=payload["sub"],
+                    auth_method="jwt",
+                )
+            except TokenError:
+                # Not a valid JWT — fall through to API key validation
+                logger.debug("JWT decode failed, falling back to API key auth")
+
+        # Fall through to API key validation
+        return await api_key_dep(request, api_key)
 
     return _verify

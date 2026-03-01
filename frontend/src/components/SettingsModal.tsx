@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { ThemeMode } from "../types";
+import type { AuthMode } from "../hooks/useAuth";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { XIcon, MoonIcon, SunIcon, MonitorIcon, CheckIcon } from "./icons";
 
@@ -7,8 +8,11 @@ interface SettingsModalProps {
   open: boolean;
   apiKey: string;
   theme: ThemeMode;
+  authMode: AuthMode;
+  userEmail: string | null;
   onSetTheme: (t: ThemeMode) => void;
   onSaveApiKey: (key: string) => void;
+  onLogout: () => void;
   onClose: () => void;
 }
 
@@ -18,8 +22,11 @@ export default function SettingsModal({
   open,
   apiKey,
   theme,
+  authMode,
+  userEmail,
   onSetTheme,
   onSaveApiKey,
+  onLogout,
   onClose,
 }: SettingsModalProps) {
   const [keyInput, setKeyInput] = useState(apiKey);
@@ -49,6 +56,8 @@ export default function SettingsModal({
     { value: "light", icon: SunIcon, label: "Light" },
     { value: "system", icon: MonitorIcon, label: "System" },
   ];
+
+  const isJwtAuth = authMode === "jwt";
 
   return (
     <div
@@ -109,44 +118,84 @@ export default function SettingsModal({
         <div className="p-6">
           {activeTab === "general" && (
             <div className="animate-fade-in">
-              <label
-                className="mb-1.5 block text-[13px] font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                API Key
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  className="w-full rounded-xl border px-3 py-2.5 pr-10 font-mono text-sm outline-none transition-colors focus:border-[var(--accent)]"
-                  style={{
-                    background: "var(--surface-2)",
-                    borderColor: keyValid === false ? "#ef4444" : keyValid === true ? "#22c55e" : "var(--border)",
-                    color: "var(--text)",
-                  }}
-                  value={keyInput}
-                  onChange={(e) => {
-                    setKeyInput(e.target.value);
-                    setKeyValid(null);
-                  }}
-                  onBlur={handleKeyBlur}
-                  placeholder="Enter your API key"
-                  autoComplete="off"
-                  aria-label="API key"
-                />
-                {keyValid !== null && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {keyValid ? (
-                      <CheckIcon size={16} className="text-green-500" />
-                    ) : (
-                      <XIcon size={16} className="text-red-500" />
+              {isJwtAuth ? (
+                /* Logged in via JWT — show user info + logout */
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <label
+                      className="mb-1.5 block text-[13px] font-medium"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      Logged in as
+                    </label>
+                    <div
+                      className="rounded-xl border px-3 py-2.5 text-sm"
+                      style={{
+                        background: "var(--surface-2)",
+                        borderColor: "var(--border)",
+                        color: "var(--text)",
+                      }}
+                    >
+                      {userEmail}
+                    </div>
+                  </div>
+                  <button
+                    className="self-start rounded-xl border px-4 py-2 text-sm font-medium transition-all hover:bg-[var(--surface-2)]"
+                    style={{
+                      borderColor: "#ef4444",
+                      color: "#ef4444",
+                    }}
+                    onClick={() => {
+                      onLogout();
+                      onClose();
+                    }}
+                  >
+                    Log out
+                  </button>
+                </div>
+              ) : (
+                /* API-key mode — show API key input */
+                <>
+                  <label
+                    className="mb-1.5 block text-[13px] font-medium"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    API Key
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      className="w-full rounded-xl border px-3 py-2.5 pr-10 font-mono text-sm outline-none transition-colors focus:border-[var(--accent)]"
+                      style={{
+                        background: "var(--surface-2)",
+                        borderColor: keyValid === false ? "#ef4444" : keyValid === true ? "#22c55e" : "var(--border)",
+                        color: "var(--text)",
+                      }}
+                      value={keyInput}
+                      onChange={(e) => {
+                        setKeyInput(e.target.value);
+                        setKeyValid(null);
+                      }}
+                      onBlur={handleKeyBlur}
+                      placeholder="Enter your API key"
+                      autoComplete="off"
+                      aria-label="API key"
+                    />
+                    {keyValid !== null && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {keyValid ? (
+                          <CheckIcon size={16} className="text-green-500" />
+                        ) : (
+                          <XIcon size={16} className="text-red-500" />
+                        )}
+                      </span>
                     )}
-                  </span>
-                )}
-              </div>
-              <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                Used for authenticating with the Barongsai API.
-              </p>
+                  </div>
+                  <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    Used for authenticating with the Barongsai API.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -234,13 +283,15 @@ export default function SettingsModal({
           >
             Cancel
           </button>
-          <button
-            className="rounded-xl px-5 py-2 text-sm font-medium transition-all hover:opacity-90 active:scale-[0.98]"
-            style={{ background: "var(--accent)", color: "var(--bg)" }}
-            onClick={handleSave}
-          >
-            Save
-          </button>
+          {!isJwtAuth && (
+            <button
+              className="rounded-xl px-5 py-2 text-sm font-medium transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ background: "var(--accent)", color: "var(--bg)" }}
+              onClick={handleSave}
+            >
+              Save
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable, Coroutine
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -50,10 +50,11 @@ def create_router(
     *,
     web_researcher: Agent | None = None,
     synthesizer: SynthesizerAgent | None = None,
+    auth_dependency: Callable[..., Coroutine[Any, Any, AuthContext]] | None = None,
 ) -> APIRouter:
     """Create the search agent router with auth dependency."""
     router = APIRouter(prefix="/api", tags=["search"])
-    verify_key = create_api_key_dependency(settings)
+    verify_key = auth_dependency or create_api_key_dependency(settings)
 
     @router.post("/search", response_model=SearchResponse)
     async def search(

@@ -136,6 +136,23 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         timeout_seconds=settings.agent_timeout_seconds,
     )
 
+    # --- User Auth (optional) ---
+    auth_dependency = None
+    if settings.user_auth_enabled:
+        from src.core.auth.routes import create_auth_router
+        from src.core.auth.user_repository import UserRepository
+        from src.core.middleware.auth import create_unified_auth_dependency
+
+        if not settings.database_url:
+            raise ValueError("database_url is required when user_auth_enabled is True")
+
+        user_repo = UserRepository(database_url=settings.database_url)
+        startup_hooks.append(user_repo.initialize)
+        shutdown_hooks.append(user_repo.close)
+
+        auth_dependency = create_unified_auth_dependency(settings)
+        logger.info("User auth enabled (JWT + API key)")
+
     # --- RAG (optional) ---
     rag_router = None
     if settings.rag_enabled:
@@ -236,13 +253,22 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         else:
             logger.info("RAG running in-memory (no database_url configured)")
 
+        from src.core.rag.parsers.registry import create_default_registry
+
+        parser_registry = create_default_registry(
+            llm_provider=llm,
+            vision_model=settings.llm_model,
+        )
+
         rag_router = create_rag_router(
             settings,
             retriever=rag_retriever,  # type: ignore[arg-type]
             synthesizer=rag_synthesizer,
+            parser_registry=parser_registry,
             chunk_size=settings.rag_chunk_size,
             chunk_overlap=settings.rag_chunk_overlap,
             max_file_size_mb=settings.rag_max_file_size_mb,
+            auth_dependency=auth_dependency,
         )
 
     # --- FastAPI App ---
@@ -251,11 +277,17 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         on_startup=startup_hooks,
         on_shutdown=shutdown_hooks,
     )
+
+    # Include auth router if user auth is enabled
+    if settings.user_auth_enabled:
+        fastapi_app.include_router(create_auth_router(settings, user_repo))
+
     router = create_router(
         orchestrator,
         settings,
         web_researcher=web_researcher,
         synthesizer=synthesizer,
+        auth_dependency=auth_dependency,
     )
     fastapi_app.include_router(router)
 
