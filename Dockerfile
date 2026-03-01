@@ -12,15 +12,30 @@ WORKDIR /app
 
 FROM base AS deps
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[rag]"
+RUN pip install --no-cache-dir --timeout=600 --retries=3 ".[rag]"
 
 # ── Stage 3: Final image ────────────────────────────────────
 FROM deps AS app
+
+# Non-root user for production safety
+RUN groupadd -r barongsai && useradd -r -g barongsai -s /sbin/nologin barongsai
+
 COPY src/ src/
 COPY assets/ assets/
 COPY --from=frontend /app/frontend/dist/ frontend/dist/
+
+RUN chown -R barongsai:barongsai /app
+USER barongsai
+
 EXPOSE 8000
 
-# Default: search agent. Override with BGS_APP_MODULE env var.
+# Tunable via environment
 ENV BGS_APP_MODULE=src.applications.search_agent.main:app
-CMD ["sh", "-c", "python -m uvicorn $BGS_APP_MODULE --host 0.0.0.0 --port 8000"]
+ENV BGS_WORKERS=2
+ENV BGS_GRACEFUL_TIMEOUT=30
+ENV BGS_MAX_REQUESTS=10000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+
+CMD ["sh", "-c", "python -m uvicorn $BGS_APP_MODULE --host 0.0.0.0 --port 8000 --workers ${BGS_WORKERS} --timeout-graceful-shutdown ${BGS_GRACEFUL_TIMEOUT} --limit-max-requests ${BGS_MAX_REQUESTS}"]
