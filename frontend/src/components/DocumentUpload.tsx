@@ -95,13 +95,13 @@ export default function DocumentUpload({
           </span>
         </div>
         <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          .txt, .md, .csv (max 10MB)
+          .txt, .md, .csv, .pdf, .pptx, .xlsx, images (max 10MB)
         </span>
         <input
           ref={fileRef}
           type="file"
           className="hidden"
-          accept=".txt,.md,.csv,.json,.log,.py,.js,.ts,.html,.xml"
+          accept=".txt,.md,.csv,.json,.log,.py,.js,.ts,.html,.xml,.pdf,.pptx,.xlsx,.png,.jpg,.jpeg,.gif,.webp"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleFile(file);
