@@ -98,7 +98,18 @@ class FAISSVectorStore(VectorStore):
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
-        return await asyncio.to_thread(self._sync_search, vector, top_k)
+        # Fetch extra candidates to allow for post-filtering
+        fetch_k = top_k * 3 if filters else top_k
+        results = await asyncio.to_thread(self._sync_search, vector, fetch_k)
+
+        if filters:
+            results = [
+                r
+                for r in results
+                if all(r.document.metadata.get(k) == v for k, v in filters.items())
+            ]
+
+        return results[:top_k]
 
     async def delete(self, ids: list[str]) -> None:
         for doc_id in ids:

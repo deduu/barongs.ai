@@ -19,28 +19,51 @@ logger = logging.getLogger(__name__)
 
 _CREATE_TABLE = """\
 CREATE TABLE IF NOT EXISTS rag_documents (
-    id         TEXT PRIMARY KEY,
+    id         TEXT NOT NULL,
+    tenant_id  TEXT NOT NULL DEFAULT 'default',
     content    TEXT NOT NULL,
     metadata   JSONB NOT NULL DEFAULT '{}',
     embedding  BYTEA,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (tenant_id, id)
 );
 """
 
+_MIGRATE_TENANT_COLUMN = """\
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'rag_documents' AND column_name = 'tenant_id'
+    ) THEN
+        ALTER TABLE rag_documents ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default';
+        ALTER TABLE rag_documents DROP CONSTRAINT IF EXISTS rag_documents_pkey;
+        ALTER TABLE rag_documents ADD PRIMARY KEY (tenant_id, id);
+    END IF;
+END $$;
+"""
+
 _UPSERT = """\
-INSERT INTO rag_documents (id, content, metadata, embedding)
-VALUES ($1, $2, $3::jsonb, $4)
-ON CONFLICT (id) DO UPDATE SET
+INSERT INTO rag_documents (id, tenant_id, content, metadata, embedding)
+VALUES ($1, $2, $3, $4::jsonb, $5)
+ON CONFLICT (tenant_id, id) DO UPDATE SET
     content   = EXCLUDED.content,
     metadata  = EXCLUDED.metadata,
     embedding = EXCLUDED.embedding;
 """
 
-_SELECT_ALL = "SELECT id, content, metadata, embedding FROM rag_documents ORDER BY created_at;"
+_SELECT_ALL = """\
+SELECT id, content, metadata, embedding FROM rag_documents
+WHERE tenant_id = $1 ORDER BY created_at;
+"""
 
-_DELETE = "DELETE FROM rag_documents WHERE id = ANY($1::text[]);"
+_DELETE = "DELETE FROM rag_documents WHERE tenant_id = $1 AND id = ANY($2::text[]);"
 
-_COUNT = "SELECT COUNT(*) FROM rag_documents;"
+_SELECT_ALL_TENANTS = """\
+SELECT id, content, metadata, embedding FROM rag_documents ORDER BY created_at;
+"""
+
+_COUNT = "SELECT COUNT(*) FROM rag_documents WHERE tenant_id = $1;"
 
 
 class PgDocumentStore:
@@ -61,36 +84,47 @@ class PgDocumentStore:
         self._dsn = database_url.replace("postgresql+asyncpg://", "postgresql://")
         self._pool: asyncpg.Pool | None = None  # type: ignore[type-arg]
 
+    def _ensure_pool(self) -> asyncpg.Pool:  # type: ignore[type-arg]
+        """Return the pool, raising RuntimeError if not initialized."""
+        if self._pool is None:
+            raise RuntimeError("PgDocumentStore not initialized. Call initialize() first.")
+        return self._pool
+
     async def initialize(self) -> None:
         """Create the connection pool and ensure the table exists."""
         self._pool = await asyncpg.create_pool(dsn=self._dsn)
         async with self._pool.acquire() as conn:
             await conn.execute(_CREATE_TABLE)
+            await conn.execute(_MIGRATE_TENANT_COLUMN)
         logger.info("PgDocumentStore initialised (table ensured)")
 
-    async def save(self, documents: list[Document]) -> None:
+    async def save(
+        self, documents: list[Document], *, tenant_id: str = "default"
+    ) -> None:
         """Upsert documents (with optional embeddings) into PostgreSQL."""
         if not documents:
             return
-        assert self._pool is not None
+        pool = self._ensure_pool()
 
-        rows: list[tuple[str, str, str, bytes | None]] = []
+        rows: list[tuple[str, str, str, str, bytes | None]] = []
         for doc in documents:
             emb_bytes: bytes | None = None
             if doc.embedding is not None and np is not None:
                 emb_bytes = np.array(doc.embedding, dtype=np.float32).tobytes()
-            rows.append((doc.id, doc.content, json.dumps(doc.metadata), emb_bytes))
+            rows.append(
+                (doc.id, tenant_id, doc.content, json.dumps(doc.metadata), emb_bytes)
+            )
 
-        async with self._pool.acquire() as conn:
+        async with pool.acquire() as conn:
             await conn.executemany(_UPSERT, rows)
-        logger.info("Saved %d documents to PostgreSQL", len(documents))
+        logger.info("Saved %d documents to PostgreSQL (tenant=%s)", len(documents), tenant_id)
 
-    async def load_all(self) -> list[Document]:
-        """Load all documents from PostgreSQL, restoring embeddings."""
-        assert self._pool is not None
+    async def load_all(self, *, tenant_id: str = "default") -> list[Document]:
+        """Load all documents for a tenant from PostgreSQL, restoring embeddings."""
+        pool = self._ensure_pool()
 
-        async with self._pool.acquire() as conn:
-            records: list[Any] = await conn.fetch(_SELECT_ALL)
+        async with pool.acquire() as conn:
+            records: list[Any] = await conn.fetch(_SELECT_ALL, tenant_id)
 
         documents: list[Document] = []
         for row in records:
@@ -111,25 +145,54 @@ class PgDocumentStore:
                 )
             )
 
-        logger.info("Loaded %d documents from PostgreSQL", len(documents))
+        logger.info("Loaded %d documents from PostgreSQL (tenant=%s)", len(documents), tenant_id)
         return documents
 
-    async def delete(self, ids: list[str]) -> None:
-        """Delete documents by their IDs."""
+    async def load_all_tenants(self) -> list[Document]:
+        """Load all documents across all tenants (used for startup index rebuild)."""
+        pool = self._ensure_pool()
+
+        async with pool.acquire() as conn:
+            records: list[Any] = await conn.fetch(_SELECT_ALL_TENANTS)
+
+        documents: list[Document] = []
+        for row in records:
+            embedding: list[float] | None = None
+            if row["embedding"] is not None and np is not None:
+                embedding = np.frombuffer(row["embedding"], dtype=np.float32).tolist()
+
+            metadata = row["metadata"]
+            if isinstance(metadata, str):
+                metadata = json.loads(metadata)
+
+            documents.append(
+                Document(
+                    id=row["id"],
+                    content=row["content"],
+                    metadata=metadata,
+                    embedding=embedding,
+                )
+            )
+
+        logger.info("Loaded %d documents from PostgreSQL (all tenants)", len(documents))
+        return documents
+
+    async def delete(self, ids: list[str], *, tenant_id: str = "default") -> None:
+        """Delete documents by their IDs within a tenant."""
         if not ids:
             return
-        assert self._pool is not None
+        pool = self._ensure_pool()
 
-        async with self._pool.acquire() as conn:
-            await conn.execute(_DELETE, ids)
-        logger.info("Deleted %d documents from PostgreSQL", len(ids))
+        async with pool.acquire() as conn:
+            await conn.execute(_DELETE, tenant_id, ids)
+        logger.info("Deleted %d documents from PostgreSQL (tenant=%s)", len(ids), tenant_id)
 
-    async def count(self) -> int:
-        """Return the total number of persisted documents."""
-        assert self._pool is not None
+    async def count(self, *, tenant_id: str = "default") -> int:
+        """Return the total number of persisted documents for a tenant."""
+        pool = self._ensure_pool()
 
-        async with self._pool.acquire() as conn:
-            result: int = await conn.fetchval(_COUNT)
+        async with pool.acquire() as conn:
+            result: int = await conn.fetchval(_COUNT, tenant_id)
         return result
 
     async def close(self) -> None:

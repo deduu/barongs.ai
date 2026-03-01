@@ -51,10 +51,11 @@ class TestPgDocumentStore:
             store = PgDocumentStore(database_url="postgresql://test:test@localhost/test")
             await store.initialize()
 
-            conn.execute.assert_called_once()
-            sql = conn.execute.call_args[0][0]
-            assert "CREATE TABLE IF NOT EXISTS" in sql
-            assert "rag_documents" in sql
+            assert conn.execute.call_count == 2
+            create_sql = conn.execute.call_args_list[0][0][0]
+            assert "CREATE TABLE IF NOT EXISTS" in create_sql
+            assert "rag_documents" in create_sql
+            assert "tenant_id" in create_sql
 
     async def test_save_documents(self):
         with patch("src.core.rag.persistence.pg_document_store.asyncpg") as mock_pg:
@@ -85,7 +86,7 @@ class TestPgDocumentStore:
 
             conn.executemany.assert_called_once()
             args = conn.executemany.call_args[0][1]
-            assert args[0][3] is None  # 4th param is embedding bytes
+            assert args[0][4] is None  # 5th param is embedding bytes (after tenant_id)
 
     async def test_load_all_returns_documents(self):
         with patch("src.core.rag.persistence.pg_document_store.asyncpg") as mock_pg:
@@ -152,8 +153,8 @@ class TestPgDocumentStore:
 
             await store.delete(["doc-1", "doc-2"])
 
-            # execute is called for CREATE TABLE + DELETE
-            assert conn.execute.call_count == 2
+            # execute is called for CREATE TABLE + MIGRATE + DELETE
+            assert conn.execute.call_count == 3
             last_call = conn.execute.call_args_list[-1]
             sql = last_call[0][0]
             assert "DELETE FROM rag_documents" in sql

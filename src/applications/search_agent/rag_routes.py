@@ -12,6 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 from src.applications.search_agent.agents.rag_synthesizer import RAGSynthesizerAgent
 from src.applications.search_agent.models.streaming import StreamEventType
 from src.core.middleware.auth import create_api_key_dependency
+from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 from src.core.models.context import AgentContext
 from src.core.rag.chunker import chunk_text
@@ -84,7 +85,7 @@ def create_rag_router(
     @router.post("/ingest", response_model=IngestResponse)
     async def ingest_text(
         request: IngestTextRequest,
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
     ) -> IngestResponse:
         content = request.content.strip()
         if not content:
@@ -94,7 +95,7 @@ def create_rag_router(
             )
 
         doc_id_prefix = f"doc-{uuid.uuid4().hex[:8]}"
-        meta = {**request.metadata}
+        meta = {**request.metadata, "tenant_id": auth.tenant_id}
         if request.title:
             meta["title"] = request.title
 
@@ -106,7 +107,7 @@ def create_rag_router(
             metadata=meta,
         )
 
-        await retriever.ingest(chunks)
+        await retriever.ingest(chunks, tenant_id=auth.tenant_id)
 
         return IngestResponse(
             status="ok",
@@ -117,7 +118,7 @@ def create_rag_router(
     @router.post("/ingest/file", response_model=IngestResponse)
     async def ingest_file(
         file: UploadFile,
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
         title: str = "",
     ) -> IngestResponse:
         raw = await file.read()
@@ -137,7 +138,7 @@ def create_rag_router(
             )
 
         doc_id_prefix = f"file-{uuid.uuid4().hex[:8]}"
-        meta: dict[str, Any] = {}
+        meta: dict[str, Any] = {"tenant_id": auth.tenant_id}
         if title:
             meta["title"] = title
         elif file.filename:
@@ -151,7 +152,7 @@ def create_rag_router(
             metadata=meta,
         )
 
-        await retriever.ingest(chunks)
+        await retriever.ingest(chunks, tenant_id=auth.tenant_id)
 
         return IngestResponse(
             status="ok",
@@ -162,7 +163,7 @@ def create_rag_router(
     @router.post("/search", response_model=RAGSearchResponse)
     async def search_documents(
         request: RAGSearchRequest,
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
     ) -> RAGSearchResponse:
         query = request.query.strip()
         if not query:
@@ -171,7 +172,9 @@ def create_rag_router(
                 detail="Query is empty.",
             )
 
-        results = await retriever.retrieve(query, top_k=request.top_k)
+        results = await retriever.retrieve(
+            query, top_k=request.top_k, filters={"tenant_id": auth.tenant_id}
+        )
 
         return RAGSearchResponse(
             results=[
@@ -188,7 +191,7 @@ def create_rag_router(
 
     @router.get("/documents", response_model=RAGDocumentsResponse)
     async def list_documents(
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
         limit: int = 100,
         offset: int = 0,
     ) -> RAGDocumentsResponse:
@@ -207,15 +210,15 @@ def create_rag_router(
     @router.delete("/documents/{doc_id}")
     async def delete_document(
         doc_id: str,
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
     ) -> dict[str, str]:
-        await retriever.delete([doc_id])
+        await retriever.delete([doc_id], tenant_id=auth.tenant_id)
         return {"status": "ok"}
 
     @router.post("/chat/stream")
     async def rag_chat_stream(
         request: RAGChatRequest,
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
     ) -> EventSourceResponse:
         async def event_generator() -> AsyncGenerator[dict[str, str], None]:
             yield {
@@ -223,9 +226,11 @@ def create_rag_router(
                 "data": json.dumps({"message": "Searching knowledge base..."}),
             }
 
-            # 1. Retrieve relevant documents
+            # 1. Retrieve relevant documents (tenant-scoped)
             results = await retriever.retrieve(
-                request.query, top_k=request.top_k
+                request.query,
+                top_k=request.top_k,
+                filters={"tenant_id": auth.tenant_id},
             )
 
             # 2. Emit sources

@@ -27,7 +27,7 @@ class TestExampleAppRoutes:
 
     async def test_chat_endpoint(self, app_client):
         response = await app_client.post(
-            "/api/chat",
+            "/api/v1/chat",
             json={"message": "Hello!"},
             headers={"X-API-Key": "test-key"},
         )
@@ -38,7 +38,7 @@ class TestExampleAppRoutes:
 
     async def test_chat_requires_auth(self, app_client):
         response = await app_client.post(
-            "/api/chat",
+            "/api/v1/chat",
             json={"message": "Hello!"},
         )
         assert response.status_code == 401

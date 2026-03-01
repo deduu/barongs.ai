@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -13,8 +14,11 @@ from src.applications.search_agent.models.streaming import StreamEventType
 from src.core.interfaces.agent import Agent
 from src.core.interfaces.orchestrator import Orchestrator
 from src.core.middleware.auth import create_api_key_dependency
+from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 from src.core.models.context import AgentContext
+
+logger = logging.getLogger(__name__)
 
 
 class SearchRequest(BaseModel):
@@ -54,9 +58,13 @@ def create_router(
     @router.post("/search", response_model=SearchResponse)
     async def search(
         request: SearchRequest,
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
     ) -> SearchResponse:
-        context = AgentContext(user_message=request.query)
+        context = AgentContext(
+            user_message=request.query,
+            tenant_id=auth.tenant_id,
+            session_id=request.session_id,
+        )
         result = await orchestrator.run(context)
 
         return SearchResponse(
@@ -69,83 +77,102 @@ def create_router(
     @router.post("/search/stream")
     async def search_stream(
         request: SearchRequest,
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
     ) -> EventSourceResponse:
         async def event_generator() -> AsyncGenerator[dict[str, str], None]:
-            # If sub-agents are available, stream incrementally
-            if web_researcher and synthesizer:
-                yield {
-                    "event": StreamEventType.STATUS,
-                    "data": json.dumps({"message": "Searching..."}),
-                }
-
-                # Step 1: Run web researcher
-                context = AgentContext(
-                    user_message=request.query,
-                    metadata={"refined_queries": [request.query]},
-                )
-                research_result = await web_researcher.run(context)
-                sources: list[dict[str, Any]] = research_result.metadata.get("sources", [])
-
-                # Emit sources as they're available
-                for source in sources:
+            try:
+                # If sub-agents are available, stream incrementally
+                if web_researcher and synthesizer:
                     yield {
-                        "event": StreamEventType.SOURCE,
-                        "data": json.dumps(source),
+                        "event": StreamEventType.STATUS,
+                        "data": json.dumps({"message": "Searching..."}),
                     }
 
-                yield {
-                    "event": StreamEventType.STATUS,
-                    "data": json.dumps({"message": "Synthesizing..."}),
-                }
+                    # Step 1: Run web researcher
+                    context = AgentContext(
+                        user_message=request.query,
+                        tenant_id=auth.tenant_id,
+                        session_id=request.session_id,
+                        metadata={"refined_queries": [request.query]},
+                    )
+                    research_result = await web_researcher.run(context)
+                    sources: list[dict[str, Any]] = research_result.metadata.get(
+                        "sources", []
+                    )
 
-                # Step 2: Stream synthesizer tokens
-                synth_context = AgentContext(
-                    user_message=request.query,
-                    metadata={"sources": sources},
-                )
-                full_response = ""
-                async for token in synthesizer.stream_run(synth_context):
-                    full_response += token
+                    # Emit sources as they're available
+                    for source in sources:
+                        yield {
+                            "event": StreamEventType.SOURCE,
+                            "data": json.dumps(source),
+                        }
+
+                    yield {
+                        "event": StreamEventType.STATUS,
+                        "data": json.dumps({"message": "Synthesizing..."}),
+                    }
+
+                    # Step 2: Stream synthesizer tokens
+                    synth_context = AgentContext(
+                        user_message=request.query,
+                        tenant_id=auth.tenant_id,
+                        session_id=request.session_id,
+                        metadata={"sources": sources},
+                    )
+                    full_response = ""
+                    async for token in synthesizer.stream_run(synth_context):
+                        full_response += token
+                        yield {
+                            "event": StreamEventType.CHUNK,
+                            "data": json.dumps({"text": token}),
+                        }
+
+                    yield {
+                        "event": StreamEventType.DONE,
+                        "data": json.dumps(
+                            {"response": full_response, "sources": sources}
+                        ),
+                    }
+                else:
+                    # Fallback: non-streaming via orchestrator
+                    yield {
+                        "event": StreamEventType.STATUS,
+                        "data": json.dumps({"message": "Searching..."}),
+                    }
+
+                    context = AgentContext(
+                        user_message=request.query,
+                        tenant_id=auth.tenant_id,
+                        session_id=request.session_id,
+                    )
+                    result = await orchestrator.run(context)
+
+                    for source in result.metadata.get("sources", []):
+                        yield {
+                            "event": StreamEventType.SOURCE,
+                            "data": json.dumps(source),
+                        }
+
                     yield {
                         "event": StreamEventType.CHUNK,
-                        "data": json.dumps({"text": token}),
+                        "data": json.dumps({"text": result.response}),
                     }
 
-                yield {
-                    "event": StreamEventType.DONE,
-                    "data": json.dumps(
-                        {"response": full_response, "sources": sources}
-                    ),
-                }
-            else:
-                # Fallback: non-streaming via orchestrator
-                yield {
-                    "event": StreamEventType.STATUS,
-                    "data": json.dumps({"message": "Searching..."}),
-                }
-
-                context = AgentContext(user_message=request.query)
-                result = await orchestrator.run(context)
-
-                for source in result.metadata.get("sources", []):
                     yield {
-                        "event": StreamEventType.SOURCE,
-                        "data": json.dumps(source),
+                        "event": StreamEventType.DONE,
+                        "data": json.dumps(
+                            {
+                                "response": result.response,
+                                "sources": result.metadata.get("sources", []),
+                            }
+                        ),
                     }
-
+            except Exception:
+                logger.exception("SSE stream error")
                 yield {
-                    "event": StreamEventType.CHUNK,
-                    "data": json.dumps({"text": result.response}),
-                }
-
-                yield {
-                    "event": StreamEventType.DONE,
+                    "event": StreamEventType.ERROR,
                     "data": json.dumps(
-                        {
-                            "response": result.response,
-                            "sources": result.metadata.get("sources", []),
-                        }
+                        {"error": "An internal error occurred. Please try again."}
                     ),
                 }
 
@@ -154,9 +181,13 @@ def create_router(
     @router.post("/chat", response_model=ChatResponse)
     async def chat(
         request: ChatRequest,
-        _api_key: str = Depends(verify_key),
+        auth: AuthContext = Depends(verify_key),
     ) -> ChatResponse:
-        context = AgentContext(user_message=request.message)
+        context = AgentContext(
+            user_message=request.message,
+            tenant_id=auth.tenant_id,
+            session_id=request.session_id,
+        )
         result = await orchestrator.run(context)
 
         return ChatResponse(

@@ -21,7 +21,7 @@ class ChatResponse(BaseModel):
 
 def create_router(orchestrator: Orchestrator, settings: AppSettings) -> APIRouter:
     """Create the example app router with auth dependency."""
-    router = APIRouter(prefix="/api", tags=["chat"])
+    router = APIRouter(prefix="/api/v1", tags=["chat"])
     verify_key = create_api_key_dependency(settings)
 
     @router.post("/chat", response_model=ChatResponse)

@@ -14,7 +14,7 @@ class TestPersistentHybridRetriever:
     async def test_initialize_loads_and_indexes(self):
         """On startup, loads docs from PG and feeds them to the in-memory stores."""
         store = AsyncMock()
-        store.load_all = AsyncMock(
+        store.load_all_tenants = AsyncMock(
             return_value=[_doc("d1", "text", emb=[0.1, 0.2])]
         )
         vector_store = AsyncMock()
@@ -27,7 +27,7 @@ class TestPersistentHybridRetriever:
         await phr.initialize()
 
         store.initialize.assert_called_once()
-        store.load_all.assert_called_once()
+        store.load_all_tenants.assert_called_once()
         # Docs with embeddings go directly to vector store (skip re-embedding)
         vector_store.upsert.assert_called_once()
         sparse_retriever.index.assert_called_once()
@@ -38,7 +38,7 @@ class TestPersistentHybridRetriever:
     async def test_initialize_skips_empty_store(self):
         """If PG has no documents, don't call upsert/index."""
         store = AsyncMock()
-        store.load_all = AsyncMock(return_value=[])
+        store.load_all_tenants = AsyncMock(return_value=[])
         retriever = AsyncMock()
         retriever._vector_store = AsyncMock()
         retriever._sparse_retriever = AsyncMock()
@@ -67,7 +67,7 @@ class TestPersistentHybridRetriever:
         await phr.ingest(docs)
 
         retriever.ingest.assert_called_once_with(docs)
-        store.save.assert_called_once_with(docs)
+        store.save.assert_called_once_with(docs, tenant_id="default")
 
     async def test_delete_removes_from_both(self):
         """Delete removes from both HybridRetriever and PgDocumentStore."""
@@ -78,7 +78,7 @@ class TestPersistentHybridRetriever:
         await phr.delete(["d1", "d2"])
 
         retriever.delete.assert_called_once_with(["d1", "d2"])
-        store.delete.assert_called_once_with(["d1", "d2"])
+        store.delete.assert_called_once_with(["d1", "d2"], tenant_id="default")
 
     async def test_retrieve_delegates_to_inner(self):
         """Retrieve is pure delegation — no persistence involved."""
@@ -100,7 +100,7 @@ class TestPersistentHybridRetriever:
     async def test_initialize_no_sparse_retriever(self):
         """Initialize works when there is no sparse retriever configured."""
         store = AsyncMock()
-        store.load_all = AsyncMock(
+        store.load_all_tenants = AsyncMock(
             return_value=[_doc("d1", "text", emb=[0.1, 0.2])]
         )
         retriever = AsyncMock()

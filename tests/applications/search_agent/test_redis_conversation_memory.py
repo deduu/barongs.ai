@@ -92,7 +92,7 @@ class TestRedisConversationMemory:
             client=redis_client, window_size=10, session_ttl_seconds=3600
         )
         await mem.set("s1", {"role": "user", "content": "test"})
-        ttl = await redis_client.ttl("bgs:session:s1")
+        ttl = await redis_client.ttl("bgs:session:t:default:s:s1")
         assert ttl > 0
         assert ttl <= 3600
 
@@ -100,6 +100,63 @@ class TestRedisConversationMemory:
         """Verify messages are stored as JSON strings in a Redis List."""
         msg = {"role": "user", "content": "hello"}
         await mem.set("s1", msg)
-        raw = await redis_client.lrange("bgs:session:s1", 0, -1)
+        raw = await redis_client.lrange("bgs:session:t:default:s:s1", 0, -1)
         assert len(raw) == 1
         assert json.loads(raw[0]) == msg
+
+
+class TestRedisConversationMemoryTenantIsolation:
+    """Verify that different tenants have isolated session data."""
+
+    async def test_different_tenants_isolated(self, redis_client):
+        mem_a = RedisConversationMemory(client=redis_client, tenant_id="tenant-a")
+        mem_b = RedisConversationMemory(client=redis_client, tenant_id="tenant-b")
+
+        await mem_a.set("s1", {"role": "user", "content": "from A"})
+        await mem_b.set("s1", {"role": "user", "content": "from B"})
+
+        result_a = await mem_a.get("s1")
+        result_b = await mem_b.get("s1")
+        assert result_a is not None
+        assert result_b is not None
+        assert result_a[0]["content"] == "from A"
+        assert result_b[0]["content"] == "from B"
+
+    async def test_search_scoped_to_tenant(self, redis_client):
+        mem_a = RedisConversationMemory(client=redis_client, tenant_id="tenant-a")
+        mem_b = RedisConversationMemory(client=redis_client, tenant_id="tenant-b")
+
+        await mem_a.set("s1", {"role": "user", "content": "Python is great"})
+        await mem_b.set("s1", {"role": "user", "content": "Python is awesome"})
+
+        results_a = await mem_a.search("Python")
+        results_b = await mem_b.search("Python")
+
+        # Each tenant should only see their own messages
+        assert all("great" in str(r["value"]) for r in results_a)
+        assert all("awesome" in str(r["value"]) for r in results_b)
+
+    async def test_clear_scoped_to_tenant(self, redis_client):
+        mem_a = RedisConversationMemory(client=redis_client, tenant_id="tenant-a")
+        mem_b = RedisConversationMemory(client=redis_client, tenant_id="tenant-b")
+
+        await mem_a.set("s1", {"role": "user", "content": "from A"})
+        await mem_b.set("s1", {"role": "user", "content": "from B"})
+
+        await mem_a.clear()
+
+        assert await mem_a.get("s1") is None
+        assert await mem_b.get("s1") is not None
+
+    async def test_legacy_key_fallback(self, redis_client):
+        """Data written with old key format can still be read."""
+        # Write with legacy format directly
+        await redis_client.rpush(
+            "bgs:session:old-session",
+            json.dumps({"role": "user", "content": "legacy data"}),
+        )
+
+        mem = RedisConversationMemory(client=redis_client, tenant_id="default")
+        result = await mem.get("old-session")
+        assert result is not None
+        assert result[0]["content"] == "legacy data"

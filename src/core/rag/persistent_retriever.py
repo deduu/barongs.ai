@@ -41,7 +41,7 @@ class PersistentHybridRetriever:
         """Connect to PG, create table, and rebuild in-memory indices."""
         await self._store.initialize()
 
-        documents = await self._store.load_all()
+        documents = await self._store.load_all_tenants()
         if not documents:
             logger.info("No persisted documents found; starting with empty index")
             return
@@ -53,10 +53,12 @@ class PersistentHybridRetriever:
 
         logger.info("Rebuilt in-memory indices from %d persisted documents", len(documents))
 
-    async def ingest(self, documents: list[Document]) -> None:
+    async def ingest(
+        self, documents: list[Document], *, tenant_id: str = "default"
+    ) -> None:
         """Index in-memory (computes embeddings), then persist to PG."""
         await self._retriever.ingest(documents)
-        await self._store.save(documents)
+        await self._store.save(documents, tenant_id=tenant_id)
 
     async def retrieve(
         self,
@@ -68,10 +70,12 @@ class PersistentHybridRetriever:
         """Pure delegation to the inner retriever."""
         return await self._retriever.retrieve(query, top_k=top_k, filters=filters)
 
-    async def delete(self, ids: list[str]) -> None:
+    async def delete(
+        self, ids: list[str], *, tenant_id: str = "default"
+    ) -> None:
         """Delete from both in-memory indices and PostgreSQL."""
         await self._retriever.delete(ids)
-        await self._store.delete(ids)
+        await self._store.delete(ids, tenant_id=tenant_id)
 
     async def close(self) -> None:
         """Close the PG connection pool."""
