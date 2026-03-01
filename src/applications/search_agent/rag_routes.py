@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import AsyncGenerator, Callable, Coroutine
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
@@ -62,6 +64,16 @@ class RAGDocumentsResponse(BaseModel):
     documents: list[RAGDocumentItem]
 
 
+class RAGChunkItem(BaseModel):
+    id: str
+    content: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RAGChunksResponse(BaseModel):
+    chunks: list[RAGChunkItem]
+
+
 class RAGChatRequest(BaseModel):
     query: str
     top_k: int = 5
@@ -98,7 +110,13 @@ def create_rag_router(
             )
 
         doc_id_prefix = f"doc-{uuid.uuid4().hex[:8]}"
-        meta = {**request.metadata, "tenant_id": auth.tenant_id}
+        meta = {
+            **request.metadata,
+            "tenant_id": auth.tenant_id,
+            "source_type": "text",
+            "file_size": len(content.encode("utf-8")),
+            "uploaded_at": datetime.now(UTC).isoformat(),
+        }
         if request.title:
             meta["title"] = request.title
 
@@ -154,7 +172,14 @@ def create_rag_router(
             )
 
         doc_id_prefix = f"file-{uuid.uuid4().hex[:8]}"
-        meta: dict[str, Any] = {"tenant_id": auth.tenant_id}
+        file_ext = Path(filename).suffix.lower()
+        meta: dict[str, Any] = {
+            "tenant_id": auth.tenant_id,
+            "source_type": "file",
+            "file_type": file_ext,
+            "file_size": len(raw),
+            "uploaded_at": datetime.now(UTC).isoformat(),
+        }
         if title:
             meta["title"] = title
         elif file.filename:
@@ -222,6 +247,19 @@ def create_rag_router(
                 for d in docs
             ]
         )
+
+    @router.get("/documents/{doc_prefix}/chunks", response_model=RAGChunksResponse)
+    async def get_document_chunks(
+        doc_prefix: str,
+        auth: AuthContext = Depends(verify_key),
+    ) -> RAGChunksResponse:
+        all_docs = await retriever._vector_store.list_documents(limit=10000, offset=0)
+        chunks = [
+            RAGChunkItem(id=d.id, content=d.content, metadata=d.metadata)
+            for d in all_docs
+            if d.id.startswith(f"{doc_prefix}-") or d.id == doc_prefix
+        ]
+        return RAGChunksResponse(chunks=chunks)
 
     @router.delete("/documents/{doc_id}")
     async def delete_document(

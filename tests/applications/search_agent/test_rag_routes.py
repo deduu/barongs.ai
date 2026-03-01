@@ -220,6 +220,100 @@ class TestRAGDocuments:
         retriever.delete.assert_called_once_with(["doc-123"], tenant_id="default")
 
 
+class TestRAGIngestMetadata:
+    """Verify that ingestion endpoints store rich metadata."""
+
+    async def test_ingest_text_stores_metadata(self) -> None:
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever.ingest = AsyncMock()
+        app = _make_app(retriever=retriever, chunk_size=5000)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/api/rag/ingest",
+                json={"content": "Some content here", "title": "My Note"},
+                headers=_auth_headers(),
+            )
+
+        assert resp.status_code == 200
+        chunks = retriever.ingest.call_args[0][0]
+        meta = chunks[0].metadata
+        assert meta["source_type"] == "text"
+        assert meta["title"] == "My Note"
+        assert "file_size" in meta
+        assert "uploaded_at" in meta
+
+    async def test_ingest_file_stores_metadata(self) -> None:
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever.ingest = AsyncMock()
+        app = _make_app(retriever=retriever, chunk_size=5000)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/api/rag/ingest/file",
+                files={"file": ("report.txt", b"File content here", "text/plain")},
+                headers=_auth_headers(),
+            )
+
+        assert resp.status_code == 200
+        chunks = retriever.ingest.call_args[0][0]
+        meta = chunks[0].metadata
+        assert meta["source_type"] == "file"
+        assert meta["file_type"] == ".txt"
+        assert meta["file_size"] == len(b"File content here")
+        assert "uploaded_at" in meta
+        assert meta["title"] == "report.txt"
+
+
+class TestRAGDocumentChunks:
+    async def test_get_chunks_by_prefix(self) -> None:
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever._vector_store = AsyncMock()
+        retriever._vector_store.list_documents = AsyncMock(
+            return_value=[
+                Document(id="doc-abc-0", content="chunk 0", metadata={"title": "T"}),
+                Document(id="doc-abc-1", content="chunk 1", metadata={"title": "T"}),
+                Document(id="doc-xyz-0", content="other", metadata={"title": "O"}),
+            ]
+        )
+        app = _make_app(retriever=retriever)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/api/rag/documents/doc-abc/chunks",
+                headers=_auth_headers(),
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["chunks"]) == 2
+        assert data["chunks"][0]["id"] == "doc-abc-0"
+        assert data["chunks"][1]["id"] == "doc-abc-1"
+
+    async def test_get_chunks_empty_result(self) -> None:
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever._vector_store = AsyncMock()
+        retriever._vector_store.list_documents = AsyncMock(return_value=[])
+        app = _make_app(retriever=retriever)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/api/rag/documents/nonexistent/chunks",
+                headers=_auth_headers(),
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["chunks"] == []
+
+
 class TestRAGChatStream:
     async def test_stream_emits_correct_events(self) -> None:
         retriever = AsyncMock(spec=HybridRetriever)
