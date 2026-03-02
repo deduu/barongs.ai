@@ -25,6 +25,12 @@ async def ready(request: Request) -> JSONResponse:
     Applications register checks via ``app.state.readiness_checks``,
     a list of ``(name, async_callable_returning_bool)`` tuples.
     """
+    if getattr(request.app.state, "shutting_down", False):
+        return JSONResponse(
+            status_code=503,
+            content={"status": "shutting_down"},
+        )
+
     checks: list[tuple[str, Any]] = getattr(request.app.state, "readiness_checks", [])
 
     if not checks:
