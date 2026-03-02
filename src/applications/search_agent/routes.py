@@ -13,6 +13,7 @@ from src.applications.search_agent.agents.synthesizer import SynthesizerAgent
 from src.applications.search_agent.models.streaming import StreamEventType
 from src.core.interfaces.agent import Agent
 from src.core.interfaces.orchestrator import Orchestrator
+from src.core.jobs.service import JobService
 from src.core.middleware.auth import create_api_key_dependency
 from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
@@ -44,6 +45,10 @@ class ChatResponse(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class AsyncSearchResponse(BaseModel):
+    job_id: str
+
+
 def create_router(
     orchestrator: Orchestrator,
     settings: AppSettings,
@@ -51,6 +56,7 @@ def create_router(
     web_researcher: Agent | None = None,
     synthesizer: SynthesizerAgent | None = None,
     auth_dependency: Callable[..., Coroutine[Any, Any, AuthContext]] | None = None,
+    job_service: JobService | None = None,
 ) -> APIRouter:
     """Create the search agent router with auth dependency."""
     router = APIRouter(prefix="/api", tags=["search"])
@@ -196,5 +202,29 @@ def create_router(
             agent_name=result.agent_name,
             metadata=result.metadata,
         )
+
+    if job_service is not None:
+
+        @router.post(
+            "/search/async",
+            response_model=AsyncSearchResponse,
+            status_code=202,
+        )
+        async def search_async(
+            request: SearchRequest,
+            auth: AuthContext = Depends(verify_key),
+        ) -> AsyncSearchResponse:
+            """Submit a search job for background processing.
+
+            Returns 202 Accepted with a job_id. Poll ``GET /api/jobs/{job_id}``
+            for results.
+            """
+            job_id = await job_service.submit(
+                "run_search",
+                query=request.query,
+                session_id=request.session_id,
+                tenant_id=auth.tenant_id,
+            )
+            return AsyncSearchResponse(job_id=job_id)
 
     return router

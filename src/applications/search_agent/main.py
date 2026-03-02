@@ -17,6 +17,7 @@ from src.applications.search_agent.streaming_pipeline import StreamableSearchPip
 from src.applications.search_agent.tools.content_fetcher import ContentFetcherTool
 from src.applications.search_agent.tools.search_api import BraveSearchTool, DuckDuckGoSearchTool
 from src.applications.search_agent.tools.url_validator import URLValidatorTool
+from src.core.http.client import HttpClientPool
 from src.core.interfaces.orchestrator import Orchestrator
 from src.core.llm.base import LLMProvider
 from src.core.llm.providers.huggingface import HuggingFaceConfig, HuggingFaceProvider
@@ -69,12 +70,25 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
     registry.register(provider)
     llm = registry.get(settings.llm_provider)
 
+    # --- HTTP Client Pool ---
+    http_pool = HttpClientPool(
+        max_connections=settings.http_max_connections,
+        max_keepalive=settings.http_max_keepalive,
+        max_concurrent=settings.http_max_concurrent_requests,
+    )
+
+    async def _close_http_pool() -> None:
+        await http_pool.aclose()
+
+    shutdown_hooks.append(_close_http_pool)
+
     # --- Tools ---
     search_tool: BraveSearchTool | DuckDuckGoSearchTool
     if settings.search_provider == "brave":
         search_tool = BraveSearchTool(
             api_key=settings.search_api_key,
             max_results=settings.search_max_results,
+            http_client=http_pool,
         )
     else:
         search_tool = DuckDuckGoSearchTool(
@@ -82,10 +96,12 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         )
     content_fetcher = ContentFetcherTool(
         max_content_length=settings.search_max_content_length,
+        http_client=http_pool,
     )
     url_validator = URLValidatorTool()
 
     # --- Memory (session persistence) ---
+    redis_client = None
     if settings.redis_url:
         import redis.asyncio as aioredis
 
@@ -101,7 +117,8 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         logger.info("Using Redis-backed conversation memory (%s)", settings.redis_url)
 
         async def _close_redis() -> None:
-            await redis_client.aclose()
+            if redis_client is not None:
+                await redis_client.aclose()
 
         shutdown_hooks.append(_close_redis)
     else:
@@ -111,6 +128,29 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
             window_size=settings.conversation_window_size,
         )
         logger.info("Using in-memory conversation memory (no Redis URL configured)")
+
+    # --- Distributed Rate Limiter (optional) ---
+    rate_limiter = None
+    if settings.rate_limit_distributed and redis_client is not None:
+        from src.core.middleware.rate_limiter import RedisRateLimiter
+
+        rate_limiter = RedisRateLimiter(
+            redis_client,
+            max_tokens=settings.rate_limit_requests,
+            window_seconds=settings.rate_limit_window_seconds,
+        )
+        logger.info("Using Redis-backed distributed rate limiter")
+
+    # --- Job Service (optional) ---
+    job_service = None
+    if settings.job_queue_enabled and redis_client is not None:
+        from src.core.jobs.router import create_job_router
+        from src.core.jobs.service import JobService
+
+        job_service = JobService(
+            redis_client, result_ttl_seconds=settings.job_result_ttl_seconds
+        )
+        logger.info("Job queue enabled")
 
     # --- Agents ---
     query_analyzer = QueryAnalyzerAgent(llm_provider=llm, model=settings.llm_model)
@@ -276,6 +316,7 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         settings,
         on_startup=startup_hooks,
         on_shutdown=shutdown_hooks,
+        rate_limiter=rate_limiter,
     )
 
     # Include auth router if user auth is enabled
@@ -288,8 +329,13 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         web_researcher=web_researcher,
         synthesizer=synthesizer,
         auth_dependency=auth_dependency,
+        job_service=job_service,
     )
     fastapi_app.include_router(router)
+
+    if job_service is not None:
+        job_router = create_job_router(job_service)
+        fastapi_app.include_router(job_router)
 
     if rag_router is not None:
         fastapi_app.include_router(rag_router)
