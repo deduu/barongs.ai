@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from src.core.http.client import HttpClientPool
 from src.core.interfaces.tool import Tool
 from src.core.middleware.circuit_breaker import CircuitBreaker
 from src.core.models.context import ToolInput
@@ -13,8 +14,14 @@ from src.core.models.results import ToolResult
 class WebSearchTool(Tool):
     """Demo tool that performs an HTTP GET request."""
 
-    def __init__(self, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        timeout: float = 10.0,
+        *,
+        http_client: HttpClientPool | None = None,
+    ) -> None:
         self._timeout = timeout
+        self._http_client = http_client
         self._circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
 
     @property
@@ -37,10 +44,13 @@ class WebSearchTool(Tool):
         url = tool_input.parameters["url"]
 
         async def _fetch() -> str:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(url, timeout=self._timeout)
-                resp.raise_for_status()
-                return resp.text[:1000]
+            if self._http_client:
+                resp = await self._http_client.get(url)
+            else:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(url, timeout=self._timeout)
+            resp.raise_for_status()
+            return resp.text[:1000]
 
         try:
             content = await self._circuit_breaker.call(_fetch)

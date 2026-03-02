@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 from bs4 import BeautifulSoup
 
+from src.core.http.client import HttpClientPool
 from src.core.interfaces.tool import Tool
 from src.core.middleware.circuit_breaker import CircuitBreaker
 from src.core.models.context import ToolInput
@@ -20,9 +21,12 @@ class ContentFetcherTool(Tool):
         self,
         timeout: float = 10.0,
         max_content_length: int = 5000,
+        *,
+        http_client: HttpClientPool | None = None,
     ) -> None:
         self._timeout = timeout
         self._max_content_length = max_content_length
+        self._http_client = http_client
         self._circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
 
     @property
@@ -60,15 +64,20 @@ class ContentFetcherTool(Tool):
         url = tool_input.parameters["url"]
 
         async def _fetch() -> str:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    url,
-                    timeout=self._timeout,
-                    follow_redirects=True,
-                    headers={"User-Agent": "Barongsai/1.0"},
+            if self._http_client:
+                response = await self._http_client.get(
+                    url, headers={"User-Agent": "Barongsai/1.0"}
                 )
-                response.raise_for_status()
-                return self._extract_text(response.text)
+            else:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        url,
+                        timeout=self._timeout,
+                        follow_redirects=True,
+                        headers={"User-Agent": "Barongsai/1.0"},
+                    )
+            response.raise_for_status()
+            return self._extract_text(response.text)
 
         try:
             content = await self._circuit_breaker.call(_fetch)

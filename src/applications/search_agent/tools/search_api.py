@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 from ddgs import DDGS
 
+from src.core.http.client import HttpClientPool
 from src.core.interfaces.tool import Tool
 from src.core.middleware.circuit_breaker import CircuitBreaker
 from src.core.models.context import ToolInput
@@ -22,10 +23,13 @@ class BraveSearchTool(Tool):
         api_key: str,
         max_results: int = 10,
         timeout: float = 10.0,
+        *,
+        http_client: HttpClientPool | None = None,
     ) -> None:
         self._api_key = api_key
         self._max_results = max_results
         self._timeout = timeout
+        self._http_client = http_client
         self._circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
 
     @property
@@ -50,19 +54,26 @@ class BraveSearchTool(Tool):
         query = tool_input.parameters["query"]
 
         async def _search() -> list[dict[str, str]]:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    self.BRAVE_API_URL,
-                    headers={
-                        "Accept": "application/json",
-                        "Accept-Encoding": "gzip",
-                        "X-Subscription-Token": self._api_key,
-                    },
-                    params={"q": query, "count": self._max_results},
-                    timeout=self._timeout,
+            headers = {
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "X-Subscription-Token": self._api_key,
+            }
+            params = {"q": query, "count": self._max_results}
+            if self._http_client:
+                response = await self._http_client.get(
+                    self.BRAVE_API_URL, headers=headers, params=params
                 )
-                response.raise_for_status()
-                data = response.json()
+            else:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        self.BRAVE_API_URL,
+                        headers=headers,
+                        params=params,
+                        timeout=self._timeout,
+                    )
+            response.raise_for_status()
+            data = response.json()
 
             results: list[dict[str, str]] = []
             for item in data.get("web", {}).get("results", []):
