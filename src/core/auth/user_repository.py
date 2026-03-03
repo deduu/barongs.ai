@@ -62,7 +62,7 @@ class UserRepository:
 
     async def initialize(self) -> None:
         """Create connection pool and ensure the users table exists."""
-        self._pool = await asyncpg.create_pool(dsn=self._dsn)
+        self._pool = await asyncpg.create_pool(dsn=self._dsn, min_size=2, max_size=5)
         async with self._pool.acquire() as conn:
             try:
                 await conn.execute(_CREATE_TABLE)

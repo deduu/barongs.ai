@@ -12,6 +12,12 @@ export interface TokenResponse {
   user: AuthUser;
 }
 
+function extractError(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map((e) => e.msg).join("; ");
+  return fallback;
+}
+
 export async function login(
   email: string,
   password: string,
@@ -23,7 +29,7 @@ export async function login(
   });
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
-    throw new Error(data.detail || `Login failed: ${resp.status}`);
+    throw new Error(extractError(data.detail, `Login failed: ${resp.status}`));
   }
   return resp.json();
 }
@@ -39,7 +45,9 @@ export async function register(
   });
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
-    throw new Error(data.detail || `Registration failed: ${resp.status}`);
+    throw new Error(
+      extractError(data.detail, `Registration failed: ${resp.status}`),
+    );
   }
   return resp.json();
 }
