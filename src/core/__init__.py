@@ -38,14 +38,18 @@ from src.core.rag import (
     VectorStore,
 )
 from src.core.server.factory import create_app
+from src.core.tools import BraveSearchTool, ContentFetcherTool, DuckDuckGoSearchTool
 
 __all__ = [
     "Agent",
     "AgentContext",
+    "BraveSearchTool",
     "AgentResult",
     "AppSettings",
+    "ContentFetcherTool",
     "Conversation",
     "Document",
+    "DuckDuckGoSearchTool",
     "Embedder",
     "HttpClientPool",
     "HybridRetriever",

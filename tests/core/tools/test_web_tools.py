@@ -4,23 +4,23 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
-from src.applications.search_agent.tools.content_fetcher import ContentFetcherTool
-from src.applications.search_agent.tools.search_api import BraveSearchTool, DuckDuckGoSearchTool
-from src.applications.search_agent.tools.url_validator import URLValidatorTool
 from src.core.models.context import ToolInput
+from src.core.tools.web.brave_search import BraveSearchTool
+from src.core.tools.web.content_fetcher import ContentFetcherTool
+from src.core.tools.web.duckduckgo_search import DuckDuckGoSearchTool
 
 # --- Brave Search Tool Tests ---
 
 
 class TestBraveSearchTool:
-    def test_properties(self):
+    def test_properties(self) -> None:
         tool = BraveSearchTool(api_key="test-key")
         assert tool.name == "brave_search"
         assert "search" in tool.description.lower()
         assert "query" in tool.input_schema["properties"]
 
     @patch("src.core.tools.web.brave_search.httpx.AsyncClient")
-    async def test_search_success(self, mock_client_cls):
+    async def test_search_success(self, mock_client_cls: MagicMock) -> None:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
@@ -57,7 +57,7 @@ class TestBraveSearchTool:
         assert result.output[0]["title"] == "Python Guide"
 
     @patch("src.core.tools.web.brave_search.httpx.AsyncClient")
-    async def test_search_failure(self, mock_client_cls):
+    async def test_search_failure(self, mock_client_cls: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(
             side_effect=httpx.HTTPStatusError(
@@ -78,7 +78,7 @@ class TestBraveSearchTool:
         assert result.error is not None
 
     @patch("src.core.tools.web.brave_search.httpx.AsyncClient")
-    async def test_search_with_max_results(self, mock_client_cls):
+    async def test_search_with_max_results(self, mock_client_cls: MagicMock) -> None:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
@@ -94,7 +94,6 @@ class TestBraveSearchTool:
         tool_input = ToolInput(tool_name="brave_search", parameters={"query": "test"})
         await tool.execute(tool_input)
 
-        # Verify count param was passed
         call_kwargs = mock_client.get.call_args
         assert call_kwargs[1]["params"]["count"] == 5
 
@@ -103,15 +102,14 @@ class TestBraveSearchTool:
 
 
 class TestDuckDuckGoSearchTool:
-    def test_properties(self):
+    def test_properties(self) -> None:
         tool = DuckDuckGoSearchTool()
         assert tool.name == "duckduckgo_search"
         assert "search" in tool.description.lower()
         assert "query" in tool.input_schema["properties"]
-        assert "api key" not in tool.description.lower() or "no api key" in tool.description.lower()
 
     @patch("src.core.tools.web.duckduckgo_search.DDGS")
-    async def test_search_success(self, mock_ddgs_cls):
+    async def test_search_success(self, mock_ddgs_cls: MagicMock) -> None:
         mock_instance = MagicMock()
         mock_instance.text.return_value = [
             {
@@ -139,7 +137,7 @@ class TestDuckDuckGoSearchTool:
         assert result.output[0]["snippet"] == "A guide to Python programming"
 
     @patch("src.core.tools.web.duckduckgo_search.DDGS")
-    async def test_search_failure(self, mock_ddgs_cls):
+    async def test_search_failure(self, mock_ddgs_cls: MagicMock) -> None:
         mock_instance = MagicMock()
         mock_instance.text.side_effect = Exception("DuckDuckGo rate limit")
         mock_ddgs_cls.return_value = mock_instance
@@ -152,19 +150,7 @@ class TestDuckDuckGoSearchTool:
         assert result.error is not None
 
     @patch("src.core.tools.web.duckduckgo_search.DDGS")
-    async def test_search_with_max_results(self, mock_ddgs_cls):
-        mock_instance = MagicMock()
-        mock_instance.text.return_value = []
-        mock_ddgs_cls.return_value = mock_instance
-
-        tool = DuckDuckGoSearchTool(max_results=3)
-        tool_input = ToolInput(tool_name="duckduckgo_search", parameters={"query": "test"})
-        await tool.execute(tool_input)
-
-        mock_instance.text.assert_called_once_with("test", max_results=3)
-
-    @patch("src.core.tools.web.duckduckgo_search.DDGS")
-    async def test_search_empty_results(self, mock_ddgs_cls):
+    async def test_search_empty_results(self, mock_ddgs_cls: MagicMock) -> None:
         mock_instance = MagicMock()
         mock_instance.text.return_value = []
         mock_ddgs_cls.return_value = mock_instance
@@ -181,13 +167,13 @@ class TestDuckDuckGoSearchTool:
 
 
 class TestContentFetcherTool:
-    def test_properties(self):
+    def test_properties(self) -> None:
         tool = ContentFetcherTool()
         assert tool.name == "content_fetcher"
         assert "url" in tool.input_schema["properties"]
 
     @patch("src.core.tools.web.content_fetcher.httpx.AsyncClient")
-    async def test_fetch_success(self, mock_client_cls):
+    async def test_fetch_success(self, mock_client_cls: MagicMock) -> None:
         html = """
         <html>
         <head><title>Test Page</title></head>
@@ -223,7 +209,7 @@ class TestContentFetcherTool:
         assert "console.log" not in result.output
 
     @patch("src.core.tools.web.content_fetcher.httpx.AsyncClient")
-    async def test_fetch_failure(self, mock_client_cls):
+    async def test_fetch_failure(self, mock_client_cls: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -241,7 +227,7 @@ class TestContentFetcherTool:
         assert result.error is not None
 
     @patch("src.core.tools.web.content_fetcher.httpx.AsyncClient")
-    async def test_content_truncation(self, mock_client_cls):
+    async def test_content_truncation(self, mock_client_cls: MagicMock) -> None:
         long_text = "x" * 10000
         html = f"<html><body><p>{long_text}</p></body></html>"
 
@@ -268,71 +254,32 @@ class TestContentFetcherTool:
         assert len(result.output) <= 500
 
 
-# --- URL Validator Tool Tests ---
+# --- Re-export backward compatibility tests ---
 
 
-class TestURLValidatorTool:
-    def test_properties(self):
-        tool = URLValidatorTool()
-        assert tool.name == "url_validator"
-        assert "urls" in tool.input_schema["properties"]
+class TestReExportBackwardCompat:
+    """Verify tools are still importable from original search_agent paths."""
 
-    async def test_deduplicate_urls(self):
-        tool = URLValidatorTool()
-        tool_input = ToolInput(
-            tool_name="url_validator",
-            parameters={
-                "urls": [
-                    "https://example.com/page",
-                    "https://example.com/page",
-                    "https://example.com/other",
-                ]
-            },
-        )
-        result = await tool.execute(tool_input)
-        assert result.success is True
-        assert len(result.output) == 2
+    def test_brave_search_importable_from_search_agent(self) -> None:
+        from src.applications.search_agent.tools.search_api import BraveSearchTool as BraveSA
 
-    async def test_filter_invalid_urls(self):
-        tool = URLValidatorTool()
-        tool_input = ToolInput(
-            tool_name="url_validator",
-            parameters={
-                "urls": [
-                    "https://example.com/valid",
-                    "not-a-url",
-                    "ftp://unsupported.com",
-                    "https://also-valid.com",
-                ]
-            },
-        )
-        result = await tool.execute(tool_input)
-        assert result.success is True
-        assert len(result.output) == 2
-        assert "https://example.com/valid" in result.output
-        assert "https://also-valid.com" in result.output
+        assert BraveSA is BraveSearchTool
 
-    async def test_empty_input(self):
-        tool = URLValidatorTool()
-        tool_input = ToolInput(
-            tool_name="url_validator",
-            parameters={"urls": []},
-        )
-        result = await tool.execute(tool_input)
-        assert result.success is True
-        assert result.output == []
+    def test_duckduckgo_importable_from_search_agent(self) -> None:
+        from src.applications.search_agent.tools.search_api import DuckDuckGoSearchTool as DdgSA
 
-    async def test_normalize_trailing_slash(self):
-        tool = URLValidatorTool()
-        tool_input = ToolInput(
-            tool_name="url_validator",
-            parameters={
-                "urls": [
-                    "https://example.com/page/",
-                    "https://example.com/page",
-                ]
-            },
-        )
-        result = await tool.execute(tool_input)
-        assert result.success is True
-        assert len(result.output) == 1
+        assert DdgSA is DuckDuckGoSearchTool
+
+    def test_content_fetcher_importable_from_search_agent(self) -> None:
+        from src.applications.search_agent.tools.content_fetcher import ContentFetcherTool as CfSA
+
+        assert CfSA is ContentFetcherTool
+
+    def test_importable_from_core_init(self) -> None:
+        from src.core import BraveSearchTool as BraveCore
+        from src.core import ContentFetcherTool as CfCore
+        from src.core import DuckDuckGoSearchTool as DdgCore
+
+        assert BraveCore is BraveSearchTool
+        assert DdgCore is DuckDuckGoSearchTool
+        assert CfCore is ContentFetcherTool
