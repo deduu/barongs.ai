@@ -340,6 +340,87 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
     if rag_router is not None:
         fastapi_app.include_router(rag_router)
 
+    # --- Deep Search (optional) ---
+    try:
+        from src.applications.deep_search.agents.academic_researcher import AcademicResearcherAgent
+        from src.applications.deep_search.agents.data_analyst import DataAnalystAgent
+        from src.applications.deep_search.agents.deep_synthesizer import DeepSynthesizerAgent
+        from src.applications.deep_search.agents.deep_web_researcher import DeepWebResearcherAgent
+        from src.applications.deep_search.agents.fact_checker import FactCheckerAgent
+        from src.applications.deep_search.agents.reflection import ReflectionAgent
+        from src.applications.deep_search.agents.research_planner import ResearchPlannerAgent
+        from src.applications.deep_search.config import DeepSearchSettings
+        from src.applications.deep_search.routes import create_router as create_deep_search_router
+        from src.applications.deep_search.streaming_pipeline import StreamableDeepSearchPipeline
+        from src.applications.deep_search.tools.academic_search import AcademicSearchTool
+        from src.applications.deep_search.tools.code_execution import CodeExecutionTool
+        from src.applications.deep_search.tools.deep_crawler import DeepCrawlerTool
+        from src.applications.deep_search.tools.source_scorer import SourceScorerTool
+        from src.core.orchestrator.strategies.research_dag import ResearchDAGStrategy
+
+        ds_settings = DeepSearchSettings()
+
+        academic_search = AcademicSearchTool(
+            http_client=http_pool,
+            max_results=ds_settings.academic_max_results,
+        )
+        deep_crawler = DeepCrawlerTool(
+            http_client=http_pool,
+            max_depth=ds_settings.deep_crawler_max_depth,
+            max_pages=ds_settings.deep_crawler_max_pages,
+        )
+        code_execution = CodeExecutionTool(
+            docker_image=ds_settings.docker_image,
+            memory_limit=ds_settings.docker_memory_limit,
+            timeout_seconds=ds_settings.docker_timeout_seconds,
+            network_disabled=ds_settings.docker_network_disabled,
+        )
+        source_scorer = SourceScorerTool()
+
+        ds_planner = ResearchPlannerAgent(llm_provider=llm, model=settings.llm_model)
+        ds_academic = AcademicResearcherAgent(
+            llm_provider=llm,
+            academic_search_tool=academic_search,
+            source_scorer_tool=source_scorer,
+            model=settings.llm_model,
+        )
+        ds_web = DeepWebResearcherAgent(
+            llm_provider=llm,
+            search_tool=search_tool,
+            deep_crawler_tool=deep_crawler,
+            source_scorer_tool=source_scorer,
+            model=settings.llm_model,
+        )
+        ds_analyst = DataAnalystAgent(
+            llm_provider=llm,
+            code_execution_tool=code_execution,
+            model=settings.llm_model,
+        )
+        ds_fact_checker = FactCheckerAgent(llm_provider=llm, model=settings.llm_model)
+        ds_reflection = ReflectionAgent(llm_provider=llm, model=settings.llm_model)
+        ds_synthesizer = DeepSynthesizerAgent(llm_provider=llm, model=settings.llm_model)
+
+        ds_agents = [ds_web, ds_academic, ds_analyst, ds_fact_checker, ds_reflection]
+        ds_strategy = ResearchDAGStrategy(max_iterations=ds_settings.research_max_iterations)
+        ds_orchestrator = Orchestrator(
+            strategy=ds_strategy,
+            agents=ds_agents,
+            timeout_seconds=settings.agent_timeout_seconds,
+        )
+        ds_pipeline = StreamableDeepSearchPipeline(
+            planner=ds_planner,
+            synthesizer=ds_synthesizer,
+            strategy=ds_strategy,
+            agents=ds_agents,
+        )
+        ds_router = create_deep_search_router(
+            ds_orchestrator, ds_settings, pipeline=ds_pipeline, auth_dependency=auth_dependency,
+        )
+        fastapi_app.include_router(ds_router)
+        logger.info("Deep Search routes mounted at /api/deep-search")
+    except Exception:
+        logger.exception("Failed to mount Deep Search routes")
+
     # --- OpenAI-compatible API (for Open WebUI) ---
     streamable_pipeline = StreamableSearchPipeline(web_researcher, synthesizer)
     model_registry = ModelRegistry()

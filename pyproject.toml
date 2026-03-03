@@ -78,6 +78,11 @@ rag-parsers = [
     "openpyxl>=3.1.0",
     "Pillow>=10.0.0",
 ]
+deep-search = [
+    "aiodocker>=0.22.0",
+    "networkx>=3.2",
+    "lxml>=5.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/deduu/barongs.ai"
@@ -217,6 +222,18 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "arq.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "aiodocker.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "networkx.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "lxml.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from src.core.http import HttpClientPool
 from src.core.interfaces import Agent, Memory, Orchestrator, OrchestratorStrategy, Tool
+from src.core.jobs import JobRecord, JobService, JobStatus
 from src.core.llm import LLMMessage, LLMProvider, LLMProviderRegistry, LLMRequest, LLMResponse
 from src.core.mcp import MCPClient, MCPServerConfig, MCPToolAdapter, load_skills_md
 from src.core.models import (
@@ -19,6 +21,7 @@ from src.core.models import (
 from src.core.orchestrator import (
     ParallelStrategy,
     PipelineStrategy,
+    ResearchDAGStrategy,
     RouterStrategy,
     SingleAgentStrategy,
 )
@@ -44,7 +47,11 @@ __all__ = [
     "Conversation",
     "Document",
     "Embedder",
+    "HttpClientPool",
     "HybridRetriever",
+    "JobRecord",
+    "JobService",
+    "JobStatus",
     "LLMMessage",
     "LLMProvider",
     "LLMProviderRegistry",
@@ -62,6 +69,7 @@ __all__ = [
     "RAGConfig",
     "RAGTool",
     "Reranker",
+    "ResearchDAGStrategy",
     "ResultSource",
     "Role",
     "RouterStrategy",

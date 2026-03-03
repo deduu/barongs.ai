@@ -14,7 +14,7 @@ FROM base AS deps
 COPY pyproject.toml .
 # Install faiss-cpu first (large 23.8 MB wheel, needs generous timeout on slow networks)
 RUN pip install --no-cache-dir --timeout=900 --retries=5 faiss-cpu>=1.7.0
-RUN pip install --no-cache-dir --timeout=600 --retries=3 ".[rag]"
+RUN pip install --no-cache-dir --timeout=600 --retries=3 ".[rag,deep-search]"
 
 # ── Stage 3: Final image ────────────────────────────────────
 FROM deps AS app
