@@ -4,8 +4,10 @@ import { getString, setItem } from "./lib/storage";
 import { useTheme } from "./hooks/useTheme";
 import { useAuth } from "./hooks/useAuth";
 import { useConversations } from "./hooks/useConversations";
+import { useProjects } from "./hooks/useProjects";
 import { useModels } from "./hooks/useModels";
 import { useStreamSearch } from "./hooks/useStreamSearch";
+import { useSearchSettings } from "./hooks/useSearchSettings";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useRAG } from "./hooks/useRAG";
 import Sidebar, { type ActivePage } from "./components/Sidebar";
@@ -55,7 +57,18 @@ export default function App() {
     deleteConversation,
     togglePin,
     saveCurrentConversation,
+    assignProject,
   } = useConversations();
+
+  /* ── Projects ────────────────────────────────────────────── */
+  const {
+    projects,
+    activeProjectId,
+    setActiveProjectId,
+    createProject,
+    renameProject,
+    deleteProject,
+  } = useProjects();
 
   /* ── Auto-load first conversation or create new ────────────── */
   useEffect(() => {
@@ -76,11 +89,15 @@ export default function App() {
   /* ── Chat mode (search / rag) ──────────────────────────────── */
   const [chatMode, setChatMode] = useState<ChatMode>("search");
 
+  /* ── Search settings ──────────────────────────────────────── */
+  const { settings: searchSettings, updateModeSettings, applyPreset, resetMode, getActivePreset } = useSearchSettings();
+
   /* ── Streaming ─────────────────────────────────────────────── */
   const { isStreaming, statusMessage, send } = useStreamSearch({
     apiKey: bearerToken,
     currentConvId,
     chatMode,
+    searchSettings,
     setMessages,
     onComplete: saveCurrentConversation,
   });
@@ -134,7 +151,7 @@ export default function App() {
   /* ── Keyboard shortcuts ──────────────────────────────────── */
   useKeyboardShortcuts({
     onNewChat: () => {
-      newChat();
+      newChat(activeProjectId);
       setActivePage("chat");
       if (isMobile) setSidebarOpen(false);
     },
@@ -192,8 +209,10 @@ export default function App() {
         conversations={conversations}
         currentConvId={currentConvId}
         activePage={activePage}
+        projects={projects}
+        activeProjectId={activeProjectId}
         onNewChat={() => {
-          newChat();
+          newChat(activeProjectId);
           setActivePage("chat");
           if (isMobile) setSidebarOpen(false);
         }}
@@ -208,6 +227,16 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onNavigate={handleNavigate}
+        onSelectProject={setActiveProjectId}
+        onCreateProject={createProject}
+        onRenameProject={renameProject}
+        onDeleteProject={(id) => {
+          conversations
+            .filter((c) => c.projectId === id)
+            .forEach((c) => assignProject(c.id, null));
+          deleteProject(id);
+        }}
+        onAssignProject={assignProject}
       />
 
       {/* Main area */}
@@ -323,6 +352,7 @@ export default function App() {
               isStreaming={isStreaming}
               statusMessage={statusMessage}
               selectedModel={selectedModel}
+              chatMode={chatMode}
               onSourceClick={openSource}
             />
             <ChatInput
@@ -347,6 +377,12 @@ export default function App() {
         theme={theme}
         authMode={auth.mode}
         userEmail={auth.user?.email ?? null}
+        chatMode={chatMode}
+        searchSettings={searchSettings}
+        onUpdateSettings={updateModeSettings}
+        onApplyPreset={applyPreset}
+        onResetSettings={resetMode}
+        getActivePreset={getActivePreset}
         onSetTheme={setTheme}
         onSaveApiKey={handleSaveApiKey}
         onLogout={auth.logout}

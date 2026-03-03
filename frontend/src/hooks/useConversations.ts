@@ -17,10 +17,13 @@ export function useConversations() {
     setItem("conversations", convs.slice(0, MAX_CONVERSATIONS));
   }, []);
 
-  const newChat = useCallback(() => {
+  const pendingProjectIdRef = useRef<string | null>(null);
+
+  const newChat = useCallback((projectId?: string | null) => {
     const id = `conv-${Date.now()}`;
     setCurrentConvId(id);
     setMessages([]);
+    pendingProjectIdRef.current = projectId ?? null;
     return id;
   }, []);
 
@@ -77,20 +80,40 @@ export function useConversations() {
       rawTitle.slice(0, 60) + (rawTitle.length > 60 ? "\u2026" : "");
 
     setConversations((prev) => {
+      const existing = prev.find((c) => c.id === currentConvId);
+      const projectId =
+        existing?.projectId ?? pendingProjectIdRef.current ?? undefined;
       const conv: Conversation = {
         id: currentConvId!,
         title,
         messages: msgs,
         updatedAt: Date.now(),
+        ...(projectId ? { projectId } : {}),
       };
       const idx = prev.findIndex((c) => c.id === currentConvId);
       const next = [...prev];
       if (idx >= 0) next[idx] = conv;
       else next.unshift(conv);
       persist(next);
+      pendingProjectIdRef.current = null;
       return next;
     });
   }, [currentConvId, persist]);
+
+  const assignProject = useCallback(
+    (conversationId: string, projectId: string | null) => {
+      setConversations((prev) => {
+        const next = prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, projectId: projectId ?? undefined }
+            : c,
+        );
+        persist(next);
+        return next;
+      });
+    },
+    [persist],
+  );
 
   return {
     conversations,
@@ -102,5 +125,6 @@ export function useConversations() {
     deleteConversation,
     togglePin,
     saveCurrentConversation,
+    assignProject,
   } as const;
 }
