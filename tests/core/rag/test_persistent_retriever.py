@@ -94,7 +94,9 @@ class TestPersistentHybridRetriever:
         phr = PersistentHybridRetriever(retriever=retriever, store=store)
         results = await phr.retrieve("query", top_k=5)
 
-        retriever.retrieve.assert_called_once_with("query", top_k=5, filters=None)
+        retriever.retrieve.assert_called_once_with(
+            "query", top_k=5, filters=None, config_override=None
+        )
         assert results == expected
 
     async def test_initialize_no_sparse_retriever(self):

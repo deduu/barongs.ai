@@ -56,12 +56,13 @@ class SynthesizerAgent(Agent):
         sources: list[dict[str, Any]] = context.metadata.get("sources", [])
         sources_text = self._format_sources(sources)
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(sources_text=sources_text)
+        temperature = context.metadata.get("temperature", 0.3)
 
         request = LLMRequest(
             messages=[LLMMessage(role="user", content=context.user_message)],
             model=self._model,
             system_prompt=system_prompt,
-            temperature=0.3,
+            temperature=temperature,
         )
 
         response = await self._llm.generate(request)
@@ -78,12 +79,13 @@ class SynthesizerAgent(Agent):
         sources: list[dict[str, Any]] = context.metadata.get("sources", [])
         sources_text = self._format_sources(sources)
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(sources_text=sources_text)
+        temperature = context.metadata.get("temperature", 0.3)
 
         request = LLMRequest(
             messages=[LLMMessage(role="user", content=context.user_message)],
             model=self._model,
             system_prompt=system_prompt,
-            temperature=0.3,
+            temperature=temperature,
         )
 
         async for token in self._llm.stream(request):

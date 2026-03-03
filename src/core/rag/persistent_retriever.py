@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.core.rag.models import Document, SearchResult
+from src.core.rag.models import Document, RAGConfig, SearchResult
 from src.core.rag.persistence.pg_document_store import PgDocumentStore
 from src.core.rag.retriever import HybridRetriever
 
@@ -66,9 +66,12 @@ class PersistentHybridRetriever:
         *,
         top_k: int | None = None,
         filters: dict[str, Any] | None = None,
+        config_override: RAGConfig | None = None,
     ) -> list[SearchResult]:
         """Pure delegation to the inner retriever."""
-        return await self._retriever.retrieve(query, top_k=top_k, filters=filters)
+        return await self._retriever.retrieve(
+            query, top_k=top_k, filters=filters, config_override=config_override
+        )
 
     async def delete(
         self, ids: list[str], *, tenant_id: str = "default"

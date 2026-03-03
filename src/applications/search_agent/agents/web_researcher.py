@@ -38,6 +38,7 @@ class WebResearcherAgent(Agent):
         return "Searches the web and compiles sources with content."
 
     async def run(self, context: AgentContext) -> AgentResult:
+        max_sources = context.metadata.get("max_sources", self._max_sources)
         refined_queries: list[str] = context.metadata.get("refined_queries", [context.user_message])
 
         # Step 1: Search for each refined query in parallel (with timeout)
@@ -88,7 +89,7 @@ class WebResearcherAgent(Agent):
                 url_to_result[normalized] = r
 
         # Step 3: Fetch content for top N valid URLs in parallel (with timeout)
-        top_urls = valid_urls[: self._max_sources]
+        top_urls = valid_urls[:max_sources]
         fetch_tasks = [
             self._content_fetcher.execute(
                 ToolInput(tool_name=self._content_fetcher.name, parameters={"url": url})

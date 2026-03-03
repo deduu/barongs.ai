@@ -18,6 +18,7 @@ from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 from src.core.models.context import AgentContext
 from src.core.rag.chunker import chunk_text
+from src.core.rag.models import RAGConfig
 from src.core.rag.parsers.registry import ParserRegistry
 from src.core.rag.persistent_retriever import PersistentHybridRetriever
 from src.core.rag.retriever import HybridRetriever
@@ -300,14 +301,28 @@ def create_rag_router(
                 "data": json.dumps({"message": "Searching knowledge base..."}),
             }
 
-            # 1. Retrieve relevant documents (tenant-scoped)
+            # 1. Build retriever config override if needed
+            config_override: RAGConfig | None = None
+            if request.dense_weight is not None or request.enable_reranker is not None:
+                inner = retriever._retriever if hasattr(retriever, "_retriever") else retriever
+                base_cfg = inner._config
+                overrides: dict[str, Any] = {}
+                if request.dense_weight is not None:
+                    overrides["dense_weight"] = request.dense_weight
+                    overrides["sparse_weight"] = round(1.0 - request.dense_weight, 2)
+                if request.enable_reranker is not None:
+                    overrides["enable_reranker"] = request.enable_reranker
+                config_override = base_cfg.model_copy(update=overrides)
+
+            # 2. Retrieve relevant documents (tenant-scoped)
             results = await retriever.retrieve(
                 request.query,
                 top_k=request.top_k,
                 filters={"tenant_id": auth.tenant_id},
+                config_override=config_override,
             )
 
-            # 2. Emit sources
+            # 3. Emit sources
             rag_sources: list[dict[str, Any]] = []
             for r in results:
                 source_data = {
@@ -328,10 +343,13 @@ def create_rag_router(
                 "data": json.dumps({"message": "Synthesizing answer..."}),
             }
 
-            # 3. Stream synthesizer response
+            # 4. Stream synthesizer response
+            synth_meta: dict[str, Any] = {"rag_sources": rag_sources}
+            if request.temperature is not None:
+                synth_meta["temperature"] = request.temperature
             synth_context = AgentContext(
                 user_message=request.query,
-                metadata={"rag_sources": rag_sources},
+                metadata=synth_meta,
             )
             full_response = ""
             async for token in synthesizer.stream_run(synth_context):

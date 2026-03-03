@@ -87,6 +87,7 @@ class HybridRetriever:
         *,
         top_k: int | None = None,
         filters: dict[str, Any] | None = None,
+        config_override: RAGConfig | None = None,
     ) -> list[SearchResult]:
         """Run the full hybrid retrieval pipeline.
 
@@ -97,7 +98,7 @@ class HybridRetriever:
         5. Rerank (if configured and enabled).
         6. Return top_k results.
         """
-        cfg = self._config
+        cfg = config_override or self._config
 
         # 1. Embed query
         query_vectors = await self._embedder.embed([query])

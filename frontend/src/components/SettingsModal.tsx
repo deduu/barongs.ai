@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
-import type { ThemeMode } from "../types";
+import type { ChatMode, ThemeMode } from "../types";
 import type { AuthMode } from "../hooks/useAuth";
+import type { SearchSettings, PresetName } from "../lib/searchSettings";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { XIcon, MoonIcon, SunIcon, MonitorIcon, CheckIcon } from "./icons";
+import SearchSettingsPanel from "./SearchSettingsPanel";
 
 interface SettingsModalProps {
   open: boolean;
@@ -10,13 +12,19 @@ interface SettingsModalProps {
   theme: ThemeMode;
   authMode: AuthMode;
   userEmail: string | null;
+  chatMode: ChatMode;
+  searchSettings: SearchSettings;
+  onUpdateSettings: <M extends ChatMode>(mode: M, partial: Partial<SearchSettings[M]>) => void;
+  onApplyPreset: (mode: ChatMode, preset: PresetName) => void;
+  onResetSettings: (mode: ChatMode) => void;
+  getActivePreset: (mode: ChatMode) => PresetName | null;
   onSetTheme: (t: ThemeMode) => void;
   onSaveApiKey: (key: string) => void;
   onLogout: () => void;
   onClose: () => void;
 }
 
-type Tab = "general" | "appearance" | "about";
+type Tab = "general" | "search" | "appearance" | "about";
 
 export default function SettingsModal({
   open,
@@ -24,6 +32,12 @@ export default function SettingsModal({
   theme,
   authMode,
   userEmail,
+  chatMode,
+  searchSettings,
+  onUpdateSettings,
+  onApplyPreset,
+  onResetSettings,
+  getActivePreset,
   onSetTheme,
   onSaveApiKey,
   onLogout,
@@ -47,6 +61,7 @@ export default function SettingsModal({
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "general", label: "General" },
+    { id: "search", label: "Search" },
     { id: "appearance", label: "Appearance" },
     { id: "about", label: "About" },
   ];
@@ -197,6 +212,17 @@ export default function SettingsModal({
                 </>
               )}
             </div>
+          )}
+
+          {activeTab === "search" && (
+            <SearchSettingsPanel
+              chatMode={chatMode}
+              settings={searchSettings}
+              onUpdate={onUpdateSettings}
+              onApplyPreset={onApplyPreset}
+              onReset={onResetSettings}
+              getActivePreset={getActivePreset}
+            />
           )}
 
           {activeTab === "appearance" && (
