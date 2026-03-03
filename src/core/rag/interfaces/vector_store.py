@@ -61,7 +61,13 @@ class VectorStore(ABC):
         """
         ...
 
-    async def list_documents(self, *, limit: int = 100, offset: int = 0) -> list[Document]:
+    async def list_documents(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        filters: dict[str, Any] | None = None,
+    ) -> list[Document]:
         """List stored documents.
 
         Not all backends support listing. The default raises
@@ -70,5 +76,6 @@ class VectorStore(ABC):
         Args:
             limit: Maximum documents to return.
             offset: Number of documents to skip.
+            filters: Optional metadata filters (key-value equality match).
         """
         raise NotImplementedError(f"{self.name} does not support list_documents")

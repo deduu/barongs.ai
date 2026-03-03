@@ -116,6 +116,18 @@ class FAISSVectorStore(VectorStore):
             self._docs.pop(doc_id, None)
         await asyncio.to_thread(self._rebuild_index)
 
-    async def list_documents(self, *, limit: int = 100, offset: int = 0) -> list[Document]:
+    async def list_documents(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        filters: dict[str, Any] | None = None,
+    ) -> list[Document]:
         all_docs = list(self._docs.values())
+        if filters:
+            all_docs = [
+                d
+                for d in all_docs
+                if all(d.metadata.get(k) == v for k, v in filters.items())
+            ]
         return all_docs[offset : offset + limit]

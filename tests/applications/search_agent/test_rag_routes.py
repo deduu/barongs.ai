@@ -314,6 +314,175 @@ class TestRAGDocumentChunks:
         assert resp.json()["chunks"] == []
 
 
+class TestRAGUserIsolation:
+    """Verify that documents are scoped per-user, not shared across all users."""
+
+    async def test_list_documents_passes_user_filter(self) -> None:
+        """list_documents endpoint must pass user_id filter to the vector store."""
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever._vector_store = AsyncMock()
+        retriever._vector_store.list_documents = AsyncMock(return_value=[])
+
+        # Use a custom auth dependency that returns a user_id
+        async def _auth_with_user() -> Any:
+            from src.core.models.auth import AuthContext
+
+            return AuthContext(
+                tenant_id="t1", user_id="user-alice", auth_method="jwt"
+            )
+
+        app = _make_app(retriever=retriever)
+        # Override auth dependency
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        settings = AppSettings(app_name="test", api_key="test-key")
+        router = create_rag_router(
+            settings,
+            retriever=retriever,
+            synthesizer=AsyncMock(spec=RAGSynthesizerAgent),
+            auth_dependency=_auth_with_user,
+        )
+        app.include_router(router)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.get("/api/rag/documents")
+
+        retriever._vector_store.list_documents.assert_called_once_with(
+            limit=100,
+            offset=0,
+            filters={"tenant_id": "t1", "user_id": "user-alice"},
+        )
+
+    async def test_get_chunks_passes_user_filter(self) -> None:
+        """get_document_chunks endpoint must pass user_id filter."""
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever._vector_store = AsyncMock()
+        retriever._vector_store.list_documents = AsyncMock(return_value=[])
+
+        async def _auth_with_user() -> Any:
+            from src.core.models.auth import AuthContext
+
+            return AuthContext(
+                tenant_id="t1", user_id="user-bob", auth_method="jwt"
+            )
+
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        settings = AppSettings(app_name="test", api_key="test-key")
+        router = create_rag_router(
+            settings,
+            retriever=retriever,
+            synthesizer=AsyncMock(spec=RAGSynthesizerAgent),
+            auth_dependency=_auth_with_user,
+        )
+        app.include_router(router)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.get("/api/rag/documents/doc-abc/chunks")
+
+        retriever._vector_store.list_documents.assert_called_once_with(
+            limit=10000,
+            offset=0,
+            filters={"tenant_id": "t1", "user_id": "user-bob"},
+        )
+
+    async def test_list_documents_api_key_auth_filters_by_tenant_only(self) -> None:
+        """When user_id is None (API key auth), filter by tenant_id only."""
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever._vector_store = AsyncMock()
+        retriever._vector_store.list_documents = AsyncMock(return_value=[])
+        app = _make_app(retriever=retriever)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.get("/api/rag/documents", headers=_auth_headers())
+
+        retriever._vector_store.list_documents.assert_called_once_with(
+            limit=100,
+            offset=0,
+            filters={"tenant_id": "default"},
+        )
+
+    async def test_ingest_text_stores_user_id(self) -> None:
+        """Text ingest must include user_id in chunk metadata."""
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever.ingest = AsyncMock()
+
+        async def _auth_with_user() -> Any:
+            from src.core.models.auth import AuthContext
+
+            return AuthContext(
+                tenant_id="t1", user_id="user-carol", auth_method="jwt"
+            )
+
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        settings = AppSettings(app_name="test", api_key="test-key")
+        router = create_rag_router(
+            settings,
+            retriever=retriever,
+            synthesizer=AsyncMock(spec=RAGSynthesizerAgent),
+            chunk_size=5000,
+            auth_dependency=_auth_with_user,
+        )
+        app.include_router(router)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.post(
+                "/api/rag/ingest",
+                json={"content": "Some content here", "title": "My Note"},
+            )
+
+        chunks = retriever.ingest.call_args[0][0]
+        assert chunks[0].metadata["user_id"] == "user-carol"
+
+    async def test_ingest_file_stores_user_id(self) -> None:
+        """File ingest must include user_id in chunk metadata."""
+        retriever = AsyncMock(spec=HybridRetriever)
+        retriever.ingest = AsyncMock()
+
+        async def _auth_with_user() -> Any:
+            from src.core.models.auth import AuthContext
+
+            return AuthContext(
+                tenant_id="t1", user_id="user-dave", auth_method="jwt"
+            )
+
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        settings = AppSettings(app_name="test", api_key="test-key")
+        router = create_rag_router(
+            settings,
+            retriever=retriever,
+            synthesizer=AsyncMock(spec=RAGSynthesizerAgent),
+            chunk_size=5000,
+            auth_dependency=_auth_with_user,
+        )
+        app.include_router(router)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.post(
+                "/api/rag/ingest/file",
+                files={"file": ("test.txt", b"File content here", "text/plain")},
+            )
+
+        chunks = retriever.ingest.call_args[0][0]
+        assert chunks[0].metadata["user_id"] == "user-dave"
+
+
 class TestRAGChatStream:
     async def test_stream_emits_correct_events(self) -> None:
         retriever = AsyncMock(spec=HybridRetriever)

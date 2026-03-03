@@ -114,7 +114,13 @@ class QdrantVectorStore(VectorStore):
             points_selector=qmodels.PointIdsList(points=ids),  # type: ignore[union-attr]
         )
 
-    async def list_documents(self, *, limit: int = 100, offset: int = 0) -> list[Document]:
+    async def list_documents(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        filters: dict[str, Any] | None = None,
+    ) -> list[Document]:
         await self._ensure_collection()
         points, _next = await self._client.scroll(
             collection_name=self._collection,
@@ -131,4 +137,10 @@ class QdrantVectorStore(VectorStore):
                     metadata=payload.get("metadata", {}),
                 )
             )
+        if filters:
+            docs = [
+                d
+                for d in docs
+                if all(d.metadata.get(k) == v for k, v in filters.items())
+            ]
         return docs

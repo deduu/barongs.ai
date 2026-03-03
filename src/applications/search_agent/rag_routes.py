@@ -77,6 +77,10 @@ class RAGChunksResponse(BaseModel):
 class RAGChatRequest(BaseModel):
     query: str
     top_k: int = 5
+    # User-configurable settings (optional, defaults match current behavior)
+    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
+    dense_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    enable_reranker: bool | None = None
 
 
 # --- Router factory ---
@@ -113,6 +117,7 @@ def create_rag_router(
         meta = {
             **request.metadata,
             "tenant_id": auth.tenant_id,
+            "user_id": auth.user_id,
             "source_type": "text",
             "file_size": len(content.encode("utf-8")),
             "uploaded_at": datetime.now(UTC).isoformat(),
@@ -175,6 +180,7 @@ def create_rag_router(
         file_ext = Path(filename).suffix.lower()
         meta: dict[str, Any] = {
             "tenant_id": auth.tenant_id,
+            "user_id": auth.user_id,
             "source_type": "file",
             "file_type": file_ext,
             "file_size": len(raw),
@@ -236,7 +242,14 @@ def create_rag_router(
         limit: int = 100,
         offset: int = 0,
     ) -> RAGDocumentsResponse:
-        docs = await retriever._vector_store.list_documents(limit=limit, offset=offset)
+        doc_filters: dict[str, Any] = {"tenant_id": auth.tenant_id}
+        if auth.user_id is not None:
+            doc_filters["user_id"] = auth.user_id
+        docs = await retriever._vector_store.list_documents(
+            limit=limit,
+            offset=offset,
+            filters=doc_filters,
+        )
         return RAGDocumentsResponse(
             documents=[
                 RAGDocumentItem(
@@ -253,7 +266,14 @@ def create_rag_router(
         doc_prefix: str,
         auth: AuthContext = Depends(verify_key),
     ) -> RAGChunksResponse:
-        all_docs = await retriever._vector_store.list_documents(limit=10000, offset=0)
+        chunk_filters: dict[str, Any] = {"tenant_id": auth.tenant_id}
+        if auth.user_id is not None:
+            chunk_filters["user_id"] = auth.user_id
+        all_docs = await retriever._vector_store.list_documents(
+            limit=10000,
+            offset=0,
+            filters=chunk_filters,
+        )
         chunks = [
             RAGChunkItem(id=d.id, content=d.content, metadata=d.metadata)
             for d in all_docs

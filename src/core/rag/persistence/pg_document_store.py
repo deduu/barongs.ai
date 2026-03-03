@@ -21,6 +21,7 @@ _CREATE_TABLE = """\
 CREATE TABLE IF NOT EXISTS rag_documents (
     id         TEXT NOT NULL,
     tenant_id  TEXT NOT NULL DEFAULT 'default',
+    user_id    TEXT,
     content    TEXT NOT NULL,
     metadata   JSONB NOT NULL DEFAULT '{}',
     embedding  BYTEA,
@@ -43,10 +44,23 @@ BEGIN
 END $$;
 """
 
+_MIGRATE_USER_COLUMN = """\
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'rag_documents' AND column_name = 'user_id'
+    ) THEN
+        ALTER TABLE rag_documents ADD COLUMN user_id TEXT;
+    END IF;
+END $$;
+"""
+
 _UPSERT = """\
-INSERT INTO rag_documents (id, tenant_id, content, metadata, embedding)
-VALUES ($1, $2, $3, $4::jsonb, $5)
+INSERT INTO rag_documents (id, tenant_id, user_id, content, metadata, embedding)
+VALUES ($1, $2, $3, $4, $5::jsonb, $6)
 ON CONFLICT (tenant_id, id) DO UPDATE SET
+    user_id   = EXCLUDED.user_id,
     content   = EXCLUDED.content,
     metadata  = EXCLUDED.metadata,
     embedding = EXCLUDED.embedding;
@@ -92,27 +106,33 @@ class PgDocumentStore:
 
     async def initialize(self) -> None:
         """Create the connection pool and ensure the table exists."""
-        self._pool = await asyncpg.create_pool(dsn=self._dsn)
+        self._pool = await asyncpg.create_pool(dsn=self._dsn, min_size=2, max_size=5)
         async with self._pool.acquire() as conn:
             await conn.execute(_CREATE_TABLE)
             await conn.execute(_MIGRATE_TENANT_COLUMN)
+            await conn.execute(_MIGRATE_USER_COLUMN)
         logger.info("PgDocumentStore initialised (table ensured)")
 
     async def save(
-        self, documents: list[Document], *, tenant_id: str = "default"
+        self,
+        documents: list[Document],
+        *,
+        tenant_id: str = "default",
+        user_id: str | None = None,
     ) -> None:
         """Upsert documents (with optional embeddings) into PostgreSQL."""
         if not documents:
             return
         pool = self._ensure_pool()
 
-        rows: list[tuple[str, str, str, str, bytes | None]] = []
+        rows: list[tuple[str, str, str | None, str, str, bytes | None]] = []
         for doc in documents:
             emb_bytes: bytes | None = None
             if doc.embedding is not None and np is not None:
                 emb_bytes = np.array(doc.embedding, dtype=np.float32).tobytes()
+            doc_user_id = user_id or doc.metadata.get("user_id")
             rows.append(
-                (doc.id, tenant_id, doc.content, json.dumps(doc.metadata), emb_bytes)
+                (doc.id, tenant_id, doc_user_id, doc.content, json.dumps(doc.metadata), emb_bytes)
             )
 
         async with pool.acquire() as conn:
