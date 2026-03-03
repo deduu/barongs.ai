@@ -2,6 +2,7 @@ services:
   # --- Database ---
   postgres:
     image: postgres:16-alpine
+    command: postgres -c max_connections=200
     ports:
       - "5432:5432"
     environment:
@@ -31,11 +32,25 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # --- Backend ---
+  # --- Load Balancer ---
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      barongsai:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # --- Backend (scalable) ---
   barongsai:
     build: .
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
+    deploy:
+      replicas: ${BGS_REPLICAS:-3}
     env_file:
       - .env
     environment:
@@ -43,6 +58,8 @@ services:
       BGS_REDIS_URL: redis://:${REDIS_PASSWORD:-barongsai}@redis:6379/0
       BGS_USER_AUTH_ENABLED: "true"
       BGS_JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      BGS_RATE_LIMIT_DISTRIBUTED: "true"
+      BGS_JOB_QUEUE_ENABLED: "true"
     volumes:
       - ./src:/app/src
     depends_on:
@@ -58,6 +75,22 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  # --- Background Worker (ARQ) ---
+  barongsai-worker:
+    build: .
+    command: python -m arq src.applications.search_agent.worker.WorkerSettings
+    env_file:
+      - .env
+    environment:
+      BGS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-barongsai}:${POSTGRES_PASSWORD:-barongsai}@postgres:5432/${POSTGRES_DB:-barongsai}
+      BGS_REDIS_URL: redis://:${REDIS_PASSWORD:-barongsai}@redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   # --- Frontend (dev) ---
   frontend:
     image: node:20-alpine
@@ -69,10 +102,10 @@ services:
       - frontend-node-modules:/app/node_modules
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     environment:
-      VITE_API_URL: http://barongsai:8000
+      VITE_API_URL: http://nginx:80
     depends_on:
-      barongsai:
-        condition: service_healthy
+      nginx:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
