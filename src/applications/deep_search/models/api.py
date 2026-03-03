@@ -19,6 +19,15 @@ class DeepSearchRequest(BaseModel):
     max_sources: int | None = Field(default=None, ge=3, le=10)
     extraction_detail: str | None = Field(default=None, pattern=r"^(low|medium|high)$")
     crawl_depth: int | None = Field(default=None, ge=1, le=3)
+    research_mode: str = Field(
+        default="general",
+        pattern=r"^(general|academic|consultant)$",
+        description="Output format: general, academic (journal paper), or consultant (consulting report)",
+    )
+    interactive_outline: bool = Field(
+        default=False,
+        description="If true, pause after planning to allow outline editing before research starts",
+    )
 
 
 class DeepSearchResponse(BaseModel):
@@ -30,3 +39,4 @@ class DeepSearchResponse(BaseModel):
     methodology_notes: str = ""
     overall_confidence: float = 0.5
     sources: list[str] = Field(default_factory=list)
+    research_mode: str = "general"

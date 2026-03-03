@@ -14,13 +14,12 @@ from src.applications.deep_search.agents.reflection import ReflectionAgent
 from src.applications.deep_search.agents.research_planner import ResearchPlannerAgent
 from src.applications.deep_search.config import DeepSearchSettings
 from src.applications.deep_search.routes import create_router
+from src.applications.deep_search.session_store import SessionStore
 from src.applications.deep_search.streaming_pipeline import StreamableDeepSearchPipeline
 from src.applications.deep_search.tools.academic_search import AcademicSearchTool
 from src.applications.deep_search.tools.code_execution import CodeExecutionTool
 from src.applications.deep_search.tools.deep_crawler import DeepCrawlerTool
 from src.applications.deep_search.tools.source_scorer import SourceScorerTool
-from src.applications.search_agent.tools.content_fetcher import ContentFetcherTool
-from src.applications.search_agent.tools.search_api import BraveSearchTool, DuckDuckGoSearchTool
 from src.core.http.client import HttpClientPool
 from src.core.interfaces.orchestrator import Orchestrator
 from src.core.llm.base import LLMProvider
@@ -29,6 +28,9 @@ from src.core.llm.providers.openai_compatible import OpenAICompatibleProvider
 from src.core.llm.registry import LLMProviderRegistry
 from src.core.orchestrator.strategies.research_dag import ResearchDAGStrategy
 from src.core.server.factory import create_app
+from src.core.tools.web.brave_search import BraveSearchTool
+from src.core.tools.web.content_fetcher import ContentFetcherTool
+from src.core.tools.web.duckduckgo_search import DuckDuckGoSearchTool
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +146,9 @@ def create_deep_search_app(settings: DeepSearchSettings | None = None) -> FastAP
         timeout_seconds=settings.agent_timeout_seconds,
     )
 
+    # --- Session Store ---
+    session_store = SessionStore()
+
     # --- Streaming Pipeline ---
     pipeline = StreamableDeepSearchPipeline(
         planner=planner,
@@ -159,12 +164,15 @@ def create_deep_search_app(settings: DeepSearchSettings | None = None) -> FastAP
         content_fetcher=content_fetcher,
         llm_provider=llm,
         model=settings.llm_model,
+        session_store=session_store,
     )
 
     # --- FastAPI App ---
     fastapi_app = create_app(settings, on_startup=startup_hooks, on_shutdown=shutdown_hooks)
 
-    router = create_router(orchestrator, settings, pipeline=pipeline)
+    router = create_router(
+        orchestrator, settings, pipeline=pipeline, session_store=session_store,
+    )
     fastapi_app.include_router(router)
 
     return fastapi_app

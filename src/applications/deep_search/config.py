@@ -35,6 +35,9 @@ class DeepSearchSettings(AppSettings):
     deep_crawler_max_depth: int = 2
     deep_crawler_max_pages: int = 10
 
+    # Research Mode
+    default_research_mode: str = "general"
+
     # Budget
     research_max_iterations: int = 3
     research_max_llm_tokens: int = 100_000

@@ -1,10 +1,24 @@
 import type { ChatMode, RAGDocument, Source } from "../types";
 
+export interface OutlineSection {
+  heading: string;
+  description: string;
+}
+
+export interface ResearchTask {
+  task_id: string;
+  query: string;
+  task_type: string;
+  agent_name: string;
+  depends_on: string[];
+}
+
 export interface StreamEvent {
   type:
     | "status" | "source" | "chunk" | "done" | "error"
     | "planning" | "researching" | "finding" | "reflecting"
-    | "synthesizing" | "budget_update" | "knowledge_graph";
+    | "synthesizing" | "budget_update" | "knowledge_graph"
+    | "outline_ready" | "awaiting_confirmation" | "outline_confirmed";
   data: {
     message?: string;
     text?: string;
@@ -24,6 +38,12 @@ export interface StreamEvent {
     score?: number;
     source?: string;
     metadata?: Record<string, unknown>;
+    // Interactive outline fields
+    session_id?: string;
+    query?: string;
+    research_mode?: string;
+    sections?: OutlineSection[];
+    research_tasks?: ResearchTask[];
   };
 }
 
@@ -248,6 +268,31 @@ export async function deleteDocument(
     method: "DELETE",
     headers: { Authorization: `Bearer ${apiKey}` },
   });
+}
+
+/* ── Interactive Outline API ──────────────────────────── */
+
+export async function confirmOutline(
+  sessionId: string,
+  apiKey: string,
+  approved: boolean = true,
+  sections?: OutlineSection[],
+  researchTasks?: ResearchTask[],
+): Promise<{ status: string }> {
+  const body: Record<string, unknown> = { session_id: sessionId, approved };
+  if (sections) body.sections = sections;
+  if (researchTasks) body.research_tasks = researchTasks;
+
+  const resp = await fetch("/api/deep-search/outline/confirm", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`Confirm failed: ${resp.status}`);
+  return resp.json();
 }
 
 /**

@@ -351,6 +351,7 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
         from src.applications.deep_search.agents.research_planner import ResearchPlannerAgent
         from src.applications.deep_search.config import DeepSearchSettings
         from src.applications.deep_search.routes import create_router as create_deep_search_router
+        from src.applications.deep_search.session_store import SessionStore
         from src.applications.deep_search.streaming_pipeline import StreamableDeepSearchPipeline
         from src.applications.deep_search.tools.academic_search import AcademicSearchTool
         from src.applications.deep_search.tools.code_execution import CodeExecutionTool
@@ -407,14 +408,20 @@ def create_search_app(settings: SearchAgentSettings | None = None) -> FastAPI:
             agents=ds_agents,
             timeout_seconds=settings.agent_timeout_seconds,
         )
+        ds_session_store = SessionStore()
         ds_pipeline = StreamableDeepSearchPipeline(
             planner=ds_planner,
             synthesizer=ds_synthesizer,
             strategy=ds_strategy,
             agents=ds_agents,
+            session_store=ds_session_store,
         )
         ds_router = create_deep_search_router(
-            ds_orchestrator, ds_settings, pipeline=ds_pipeline, auth_dependency=auth_dependency,
+            ds_orchestrator,
+            ds_settings,
+            pipeline=ds_pipeline,
+            session_store=ds_session_store,
+            auth_dependency=auth_dependency,
         )
         fastapi_app.include_router(ds_router)
         logger.info("Deep Search routes mounted at /api/deep-search")

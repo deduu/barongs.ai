@@ -276,6 +276,7 @@ class TestDeepSearchEventType:
         expected = {
             "status", "planning", "researching", "finding", "reflecting",
             "synthesizing", "chunk", "knowledge_graph", "budget_update",
+            "outline_ready", "awaiting_confirmation", "outline_confirmed",
             "done", "error",
         }
         actual = {e.value for e in DeepSearchEventType}

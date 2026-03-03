@@ -13,5 +13,8 @@ class DeepSearchEventType(StrEnum):
     CHUNK = "chunk"
     KNOWLEDGE_GRAPH = "knowledge_graph"
     BUDGET_UPDATE = "budget_update"
+    OUTLINE_READY = "outline_ready"
+    AWAITING_CONFIRMATION = "awaiting_confirmation"
+    OUTLINE_CONFIRMED = "outline_confirmed"
     DONE = "done"
     ERROR = "error"

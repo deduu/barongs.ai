@@ -5,6 +5,8 @@ import logging
 import re
 from typing import Any
 
+from src.applications.deep_search.models.research_mode import ResearchMode
+from src.applications.deep_search.prompts.planner_prompts import PLANNER_PROMPTS
 from src.core.interfaces.agent import Agent
 from src.core.llm.base import LLMProvider
 from src.core.llm.models import LLMMessage, LLMRequest
@@ -12,33 +14,6 @@ from src.core.models.context import AgentContext
 from src.core.models.results import AgentResult
 
 logger = logging.getLogger(__name__)
-
-PLANNER_SYSTEM_PROMPT = """You are a research planning agent. Given a user query, decompose it into a DAG of research sub-tasks.
-
-{entity_context}
-
-Return ONLY valid JSON with this structure:
-{{
-  "tasks": [
-    {{
-      "task_id": "t1",
-      "query": "specific sub-question about {entity_name}",
-      "task_type": "secondary_web|secondary_academic|primary_code|fact_check|reflection",
-      "depends_on": [],
-      "agent_name": "deep_web_researcher|academic_researcher|data_analyst|fact_checker|reflection"
-    }}
-  ]
-}}
-
-Rules:
-- Each task must have a unique task_id
-- fact_check tasks should depend on research tasks
-- reflection tasks should depend on all other tasks
-- Use secondary_web for general web research
-- Use secondary_academic for scholarly/scientific topics
-- Use primary_code for data analysis or computation tasks
-- IMPORTANT: All search queries MUST include disambiguating terms for the target entity to avoid results about different entities with similar names
-- Keep tasks focused and specific"""
 
 
 class ResearchPlannerAgent(Agent):
@@ -73,7 +48,9 @@ class ResearchPlannerAgent(Agent):
                     f"Include disambiguating terms in every search query."
                 )
 
-            system_prompt = PLANNER_SYSTEM_PROMPT.format(
+            research_mode = ResearchMode(context.metadata.get("research_mode", "general"))
+            template = PLANNER_PROMPTS[research_mode]
+            system_prompt = template.format(
                 entity_context=entity_context,
                 entity_name=entity_name,
             )

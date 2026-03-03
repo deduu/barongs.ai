@@ -9,7 +9,9 @@ from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
 from src.applications.deep_search.models.api import DeepSearchRequest, DeepSearchResponse
+from src.applications.deep_search.models.outline import OutlineConfirmation
 from src.applications.deep_search.models.streaming import DeepSearchEventType
+from src.applications.deep_search.session_store import SessionStore
 from src.applications.deep_search.streaming_pipeline import StreamableDeepSearchPipeline
 from src.core.interfaces.orchestrator import Orchestrator
 from src.core.middleware.auth import create_api_key_dependency
@@ -25,6 +27,7 @@ def create_router(
     settings: AppSettings,
     *,
     pipeline: StreamableDeepSearchPipeline | None = None,
+    session_store: SessionStore | None = None,
     auth_dependency: Callable[..., Coroutine[Any, Any, AuthContext]] | None = None,
 ) -> APIRouter:
     """Create the deep search API router."""
@@ -45,6 +48,7 @@ def create_router(
                 "max_time_seconds": request.max_time_seconds,
                 "enable_code_execution": request.enable_code_execution,
                 "enable_academic_search": request.enable_academic_search,
+                "research_mode": request.research_mode,
             },
         )
         result = await orchestrator.run(context)
@@ -62,6 +66,7 @@ def create_router(
             methodology_notes="",
             overall_confidence=0.5,
             sources=sources,
+            research_mode=request.research_mode,
         )
 
     @router.post("/deep-search/stream")
@@ -72,14 +77,29 @@ def create_router(
         async def event_generator() -> AsyncGenerator[dict[str, str], None]:
             try:
                 if pipeline:
+                    # Build settings overrides from request
+                    settings_meta: dict[str, Any] = {}
+                    if request.temperature is not None:
+                        settings_meta["temperature"] = request.temperature
+                    if request.max_sources is not None:
+                        settings_meta["max_sources"] = request.max_sources
+                    if request.extraction_detail is not None:
+                        settings_meta["extraction_detail"] = request.extraction_detail
+                    if request.crawl_depth is not None:
+                        settings_meta["crawl_depth"] = request.crawl_depth
+
                     context = AgentContext(
                         user_message=request.query,
                         tenant_id=auth.tenant_id,
                         session_id=request.session_id,
                         metadata={
                             "max_iterations": request.max_iterations,
+                            "max_time_seconds": request.max_time_seconds,
                             "enable_code_execution": request.enable_code_execution,
                             "enable_academic_search": request.enable_academic_search,
+                            "research_mode": request.research_mode,
+                            "interactive_outline": request.interactive_outline,
+                            **settings_meta,
                         },
                     )
                     async for event in pipeline.stream_run(context):
@@ -102,5 +122,28 @@ def create_router(
                 }
 
         return EventSourceResponse(event_generator())
+
+    @router.post("/deep-search/outline/confirm")
+    async def confirm_outline(
+        confirmation: OutlineConfirmation,
+        auth: AuthContext = Depends(verify_key),
+    ) -> dict[str, str]:
+        if not session_store:
+            return {"status": "error", "message": "Session store not configured"}
+
+        session = session_store.get(confirmation.session_id)
+        if not session:
+            return {"status": "error", "message": "Session not found or expired"}
+
+        response_data: dict[str, Any] = {"approved": confirmation.approved}
+        if confirmation.sections is not None:
+            response_data["sections"] = [s.model_dump() for s in confirmation.sections]
+        if confirmation.research_tasks is not None:
+            response_data["research_tasks"] = [
+                t.model_dump() for t in confirmation.research_tasks
+            ]
+
+        session.confirm(response_data)
+        return {"status": "ok"}
 
     return router

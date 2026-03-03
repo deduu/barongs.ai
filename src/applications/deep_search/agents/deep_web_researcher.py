@@ -43,8 +43,13 @@ class DeepWebResearcherAgent(Agent):
     def description(self) -> str:
         return "Deep web research with crawling and knowledge extraction."
 
+    _EXTRACTION_DETAIL_TOKENS = {"low": 400, "medium": 800, "high": 1200}
+
     async def run(self, context: AgentContext) -> AgentResult:
         query = context.user_message
+        max_sources = context.metadata.get("max_sources", self._max_sources)
+        extraction_detail = context.metadata.get("extraction_detail", "medium")
+        extract_max_tokens = self._EXTRACTION_DETAIL_TOKENS.get(extraction_detail, 800)
         entity_grounding = context.metadata.get("entity_grounding", {})
         entity_name = entity_grounding.get("name", "")
         entity_desc = entity_grounding.get("description", "")
@@ -61,7 +66,7 @@ class DeepWebResearcherAgent(Agent):
                 metadata={"findings": []},
             )
 
-        results: list[dict[str, Any]] = search_result.output[: self._max_sources]
+        results: list[dict[str, Any]] = search_result.output[:max_sources]
         findings: list[dict[str, Any]] = []
 
         for item in results:
@@ -118,7 +123,7 @@ class DeepWebResearcherAgent(Agent):
                         f"{_NOT_RELEVANT_SENTINEL}"
                     ),
                     temperature=0.2,
-                    max_tokens=800,
+                    max_tokens=extract_max_tokens,
                 )
                 response = await self._llm.generate(request)
 

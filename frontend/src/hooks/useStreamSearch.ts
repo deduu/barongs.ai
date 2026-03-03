@@ -1,8 +1,23 @@
 import { useCallback, useRef, useState } from "react";
 import type { ChatMode, Message, Source } from "../types";
 import type { SearchSettings } from "../lib/searchSettings";
-import { streamSearch, type RAGSourceData, type StreamEvent } from "../lib/api";
+import {
+  streamSearch,
+  confirmOutline,
+  type OutlineSection,
+  type RAGSourceData,
+  type ResearchTask,
+  type StreamEvent,
+} from "../lib/api";
 import { escapeUserHtml, renderFinal, renderStreaming } from "../lib/markdown";
+
+export interface OutlineData {
+  sessionId: string;
+  query: string;
+  researchMode: string;
+  sections: OutlineSection[];
+  researchTasks: ResearchTask[];
+}
 
 interface UseStreamSearchOptions {
   apiKey: string;
@@ -35,6 +50,7 @@ export function useStreamSearch({
 }: UseStreamSearchOptions) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [outlineData, setOutlineData] = useState<OutlineData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
@@ -113,6 +129,22 @@ export function useStreamSearch({
             updateAssistant(() => ({ sources: [...sourcesAccum] }));
             break;
           }
+          case "outline_ready":
+            setOutlineData({
+              sessionId: event.data.session_id ?? "",
+              query: event.data.query ?? "",
+              researchMode: event.data.research_mode ?? "general",
+              sections: event.data.sections ?? [],
+              researchTasks: event.data.research_tasks ?? [],
+            });
+            setStatusMessage("Waiting for outline confirmation\u2026");
+            break;
+          case "awaiting_confirmation":
+            break;
+          case "outline_confirmed":
+            setOutlineData(null);
+            setStatusMessage("Outline confirmed, starting research\u2026");
+            break;
           case "budget_update":
           case "knowledge_graph":
             break;
@@ -187,7 +219,7 @@ export function useStreamSearch({
         }));
       };
 
-      const modeSettings = searchSettings[chatMode] as Record<string, unknown>;
+      const modeSettings = searchSettings[chatMode] as unknown as Record<string, unknown>;
       abortRef.current = streamSearch(
         query,
         currentConvId ?? "default",
@@ -207,5 +239,26 @@ export function useStreamSearch({
     abortRef.current = null;
   }, []);
 
-  return { isStreaming, statusMessage, send, abort } as const;
+  const submitOutline = useCallback(
+    async (
+      sections?: OutlineSection[],
+      researchTasks?: ResearchTask[],
+    ) => {
+      if (!outlineData) return;
+      try {
+        await confirmOutline(
+          outlineData.sessionId,
+          apiKey,
+          true,
+          sections,
+          researchTasks,
+        );
+      } catch (e) {
+        console.error("Failed to confirm outline:", e);
+      }
+    },
+    [outlineData, apiKey],
+  );
+
+  return { isStreaming, statusMessage, outlineData, send, abort, submitOutline } as const;
 }

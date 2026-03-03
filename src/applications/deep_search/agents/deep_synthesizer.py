@@ -3,40 +3,13 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
+from src.applications.deep_search.models.research_mode import ResearchMode
+from src.applications.deep_search.prompts.synthesizer_prompts import SYNTH_PROMPTS
 from src.core.interfaces.agent import Agent
 from src.core.llm.base import LLMProvider
 from src.core.llm.models import LLMMessage, LLMRequest
 from src.core.models.context import AgentContext
 from src.core.models.results import AgentResult
-
-SYNTH_SYSTEM_PROMPT = """You are a deep research synthesizer. Create a comprehensive research report from the findings.
-
-{entity_context}
-
-Structure your response as:
-# Executive Summary
-Brief overview of key findings about {entity_name}.
-
-## [Topic Section 1]
-Detailed analysis with inline citations [source_url].
-
-## [Topic Section 2]
-...
-
-## Methodology Notes
-How the research was conducted.
-
-## Limitations
-What gaps or uncertainties remain.
-
-FINDINGS:
-{findings_text}
-
-IMPORTANT RULES:
-- Every claim must reference a finding.
-- ONLY include information that is specifically about {entity_name}.
-- If a finding appears to be about a different entity with a similar name, DISCARD it and note this in the Limitations section.
-- If no relevant findings exist, say so honestly rather than speculating."""
 
 
 class DeepSynthesizerAgent(Agent):
@@ -91,17 +64,40 @@ class DeepSynthesizerAgent(Agent):
 
         findings_text = self._format_findings(relevant_findings)
 
-        system_prompt = SYNTH_SYSTEM_PROMPT.format(
-            findings_text=findings_text,
-            entity_context=entity_context,
-            entity_name=entity_name,
-        )
+        custom_sections = context.metadata.get("custom_sections")
+        if custom_sections:
+            # User edited the outline — build prompt from their section structure
+            section_instructions = "\n".join(
+                f"## {s['heading']}\n{s.get('description', '')}"
+                for s in custom_sections
+            )
+            system_prompt = (
+                f"You are a deep research synthesizer. Create a comprehensive research report "
+                f"from the findings.\n\n{entity_context}\n\n"
+                f"Structure your response using EXACTLY these sections:\n\n{section_instructions}\n\n"
+                f"FINDINGS:\n{findings_text}\n\n"
+                f"IMPORTANT RULES:\n"
+                f"- Every claim must reference a finding.\n"
+                f"- ONLY include information that is specifically about {entity_name}.\n"
+                f"- If a finding appears to be about a different entity, DISCARD it.\n"
+                f"- If no relevant findings exist, say so honestly rather than speculating."
+            )
+        else:
+            research_mode = ResearchMode(context.metadata.get("research_mode", "general"))
+            template = SYNTH_PROMPTS[research_mode]
+            system_prompt = template.format(
+                findings_text=findings_text,
+                entity_context=entity_context,
+                entity_name=entity_name,
+            )
+
+        temperature = context.metadata.get("temperature", 0.3)
 
         return LLMRequest(
             messages=[LLMMessage(role="user", content=context.user_message)],
             model=self._model,
             system_prompt=system_prompt,
-            temperature=0.3,
+            temperature=temperature,
         )
 
     async def run(self, context: AgentContext) -> AgentResult:
