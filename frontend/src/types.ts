@@ -1,6 +1,6 @@
 export type ThemeMode = "dark" | "light" | "system";
 
-export type ChatMode = "search" | "rag";
+export type ChatMode = "search" | "deep_search" | "rag";
 
 export interface Source {
   url: string;
@@ -33,4 +33,11 @@ export interface Conversation {
   messages: Message[];
   updatedAt: number;
   pinned?: boolean;
+  projectId?: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: number;
 }

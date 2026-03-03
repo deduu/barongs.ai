@@ -1,15 +1,25 @@
+import type { ChatMode } from "../types";
+
 interface StatusIndicatorProps {
   message: string;
+  chatMode?: ChatMode;
 }
 
-const phases = [
+const webPhases = [
   { key: "searching", label: "Searching" },
   { key: "reading", label: "Reading" },
   { key: "analyzing", label: "Analyzing" },
   { key: "writing", label: "Writing" },
 ] as const;
 
-function getActivePhase(message: string): string {
+const deepPhases = [
+  { key: "planning", label: "Planning" },
+  { key: "researching", label: "Researching" },
+  { key: "reflecting", label: "Reflecting" },
+  { key: "synthesizing", label: "Synthesizing" },
+] as const;
+
+function getWebPhase(message: string): string {
   const lower = message.toLowerCase();
   if (lower.includes("search")) return "searching";
   if (lower.includes("read") || lower.includes("fetch") || lower.includes("crawl")) return "reading";
@@ -17,8 +27,18 @@ function getActivePhase(message: string): string {
   return "writing";
 }
 
-export default function StatusIndicator({ message }: StatusIndicatorProps) {
-  const active = getActivePhase(message);
+function getDeepPhase(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("plan")) return "planning";
+  if (lower.includes("research") || lower.includes("finding")) return "researching";
+  if (lower.includes("reflect") || lower.includes("check") || lower.includes("verif")) return "reflecting";
+  if (lower.includes("synth") || lower.includes("report") || lower.includes("generat")) return "synthesizing";
+  return "planning";
+}
+
+export default function StatusIndicator({ message, chatMode = "search" }: StatusIndicatorProps) {
+  const phases = chatMode === "deep_search" ? deepPhases : webPhases;
+  const active = chatMode === "deep_search" ? getDeepPhase(message) : getWebPhase(message);
 
   return (
     <div className="mb-4 flex items-center gap-2 animate-fade-in" role="status" aria-label={message}>

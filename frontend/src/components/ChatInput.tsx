@@ -63,7 +63,9 @@ export default function ChatInput({
               placeholder={
                 chatMode === "rag"
                   ? "Ask about your documents..."
-                  : "Ask anything..."
+                  : chatMode === "deep_search"
+                    ? "Ask a research question..."
+                    : "Ask anything..."
               }
               rows={1}
               disabled={disabled}

@@ -80,7 +80,7 @@ export default function WelcomeScreen({ onSend, chatMode, onChatModeChange }: We
               ref={inputRef}
               className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-[var(--text-muted)]"
               style={{ color: "var(--text)", minHeight: 60, maxHeight: 160, fontFamily: "inherit" }}
-              placeholder={chatMode === "rag" ? "Ask about your documents..." : "Ask anything..."}
+              placeholder={chatMode === "rag" ? "Ask about your documents..." : chatMode === "deep_search" ? "Ask a research question..." : "Ask anything..."}
               rows={2}
               onKeyDown={handleKeyDown}
               onInput={() => {

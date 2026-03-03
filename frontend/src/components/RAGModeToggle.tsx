@@ -1,9 +1,41 @@
 import type { ChatMode } from "../types";
-import { GlobeIcon, BookIcon } from "./icons";
+import { GlobeIcon, LayersIcon, BookIcon } from "./icons";
 
 interface RAGModeToggleProps {
   mode: ChatMode;
   onChange: (mode: ChatMode) => void;
+}
+
+function ToggleButton({
+  active,
+  onClick,
+  label,
+  ariaLabel,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  ariaLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition-all"
+      style={{
+        background: active ? "var(--surface)" : "transparent",
+        color: active ? "var(--text)" : "var(--text-muted)",
+        boxShadow: active ? "0 1px 2px rgba(0,0,0,0.1)" : "none",
+      }}
+      onClick={onClick}
+      role="radio"
+      aria-checked={active}
+      aria-label={ariaLabel}
+    >
+      {children}
+      <span>{label}</span>
+    </button>
+  );
 }
 
 export default function RAGModeToggle({ mode, onChange }: RAGModeToggleProps) {
@@ -14,36 +46,15 @@ export default function RAGModeToggle({ mode, onChange }: RAGModeToggleProps) {
       role="radiogroup"
       aria-label="Chat mode"
     >
-      <button
-        className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition-all"
-        style={{
-          background: mode === "search" ? "var(--surface)" : "transparent",
-          color: mode === "search" ? "var(--text)" : "var(--text-muted)",
-          boxShadow: mode === "search" ? "0 1px 2px rgba(0,0,0,0.1)" : "none",
-        }}
-        onClick={() => onChange("search")}
-        role="radio"
-        aria-checked={mode === "search"}
-        aria-label="Web Search mode"
-      >
+      <ToggleButton active={mode === "search"} onClick={() => onChange("search")} label="Web" ariaLabel="Web Search mode">
         <GlobeIcon size={13} />
-        <span>Web</span>
-      </button>
-      <button
-        className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition-all"
-        style={{
-          background: mode === "rag" ? "var(--surface)" : "transparent",
-          color: mode === "rag" ? "var(--text)" : "var(--text-muted)",
-          boxShadow: mode === "rag" ? "0 1px 2px rgba(0,0,0,0.1)" : "none",
-        }}
-        onClick={() => onChange("rag")}
-        role="radio"
-        aria-checked={mode === "rag"}
-        aria-label="Knowledge Base mode"
-      >
+      </ToggleButton>
+      <ToggleButton active={mode === "deep_search"} onClick={() => onChange("deep_search")} label="Deep" ariaLabel="Deep Research mode">
+        <LayersIcon size={13} />
+      </ToggleButton>
+      <ToggleButton active={mode === "rag"} onClick={() => onChange("rag")} label="KB" ariaLabel="Knowledge Base mode">
         <BookIcon size={13} />
-        <span>KB</span>
-      </button>
+      </ToggleButton>
     </div>
   );
 }

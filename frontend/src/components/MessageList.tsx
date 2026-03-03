@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Message, Source } from "../types";
+import type { ChatMode, Message, Source } from "../types";
 import MessageBubble from "./MessageBubble";
 import StatusIndicator from "./StatusIndicator";
 import ScrollToBottom from "./ScrollToBottom";
@@ -9,6 +9,7 @@ interface MessageListProps {
   isStreaming: boolean;
   statusMessage: string;
   selectedModel: string;
+  chatMode: ChatMode;
   onSourceClick: (source: Source) => void;
 }
 
@@ -17,6 +18,7 @@ export default function MessageList({
   isStreaming,
   statusMessage,
   selectedModel,
+  chatMode,
   onSourceClick,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -65,7 +67,7 @@ export default function MessageList({
 
           {/* Status indicator during streaming */}
           {isStreaming && statusMessage && (
-            <StatusIndicator message={statusMessage} />
+            <StatusIndicator message={statusMessage} chatMode={chatMode} />
           )}
         </div>
       </div>

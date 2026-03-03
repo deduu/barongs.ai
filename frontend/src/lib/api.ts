@@ -1,17 +1,24 @@
 import type { ChatMode, RAGDocument, Source } from "../types";
 
 export interface StreamEvent {
-  type: "status" | "source" | "chunk" | "done" | "error";
+  type:
+    | "status" | "source" | "chunk" | "done" | "error"
+    | "planning" | "researching" | "finding" | "reflecting"
+    | "synthesizing" | "budget_update" | "knowledge_graph";
   data: {
     message?: string;
     text?: string;
+    token?: string;
     response?: string;
+    status?: string;
     sources?: Source[];
     rag_sources?: RAGSourceData[];
     url?: string;
     title?: string;
     snippet?: string;
     content?: string;
+    finding?: Record<string, unknown>;
+    finding_count?: number;
     // RAG source fields
     id?: string;
     score?: number;
@@ -78,6 +85,30 @@ function readSSE(
           }
         }
       }
+
+      // Flush decoder and remaining buffer after stream ends
+      buf += decoder.decode(new Uint8Array(), { stream: false });
+      if (buf.trim()) {
+        for (const rawLine of buf.split("\n")) {
+          const line = rawLine.replace(/\r$/, "");
+          if (line.startsWith("event:")) {
+            evtType = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            evtData = line.slice(5).trim();
+          }
+        }
+      }
+      // Dispatch any pending event not terminated by a blank line
+      if (evtType && evtData) {
+        try {
+          onEvent({
+            type: evtType as StreamEvent["type"],
+            data: JSON.parse(evtData),
+          });
+        } catch (e) {
+          console.warn("SSE flush parse error:", e);
+        }
+      }
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
         onError((e as Error).message);
@@ -100,16 +131,23 @@ export function streamSearch(
   onDone: () => void,
   onError: (err: string) => void,
   mode: ChatMode = "search",
+  settings?: Record<string, unknown>,
 ): AbortController {
   const controller = new AbortController();
 
   const endpoint =
-    mode === "rag" ? "/api/rag/chat/stream" : "/api/search/stream";
-
-  const body =
     mode === "rag"
-      ? JSON.stringify({ query })
-      : JSON.stringify({ query, session_id: sessionId });
+      ? "/api/rag/chat/stream"
+      : mode === "deep_search"
+        ? "/api/deep-search/stream"
+        : "/api/search/stream";
+
+  const baseBody: Record<string, unknown> =
+    mode === "rag" || mode === "deep_search"
+      ? { query }
+      : { query, session_id: sessionId };
+
+  const body = JSON.stringify({ ...baseBody, ...settings });
 
   (async () => {
     try {

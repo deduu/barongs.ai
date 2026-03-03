@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { ChatMode, Message, Source } from "../types";
+import type { SearchSettings } from "../lib/searchSettings";
 import { streamSearch, type RAGSourceData, type StreamEvent } from "../lib/api";
 import { escapeUserHtml, renderFinal, renderStreaming } from "../lib/markdown";
 
@@ -7,6 +8,7 @@ interface UseStreamSearchOptions {
   apiKey: string;
   currentConvId: string | null;
   chatMode: ChatMode;
+  searchSettings: SearchSettings;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   onComplete: () => void;
 }
@@ -27,6 +29,7 @@ export function useStreamSearch({
   apiKey,
   currentConvId,
   chatMode,
+  searchSettings,
   setMessages,
   onComplete,
 }: UseStreamSearchOptions) {
@@ -61,7 +64,11 @@ export function useStreamSearch({
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
       setStatusMessage(
-        chatMode === "rag" ? "Searching knowledge base\u2026" : "Searching\u2026",
+        chatMode === "rag"
+          ? "Searching knowledge base\u2026"
+          : chatMode === "deep_search"
+            ? "Planning research\u2026"
+            : "Searching\u2026",
       );
 
       // Accumulate sources in a local ref to avoid stale closures
@@ -89,9 +96,29 @@ export function useStreamSearch({
             updateAssistant(() => ({ sources: [...sourcesAccum] }));
             break;
           }
+          case "planning":
+          case "researching":
+          case "reflecting":
+          case "synthesizing":
+            setStatusMessage(event.data.status ?? event.data.message ?? "Processing\u2026");
+            break;
+          case "finding": {
+            const f = (event.data.finding ?? event.data) as Record<string, unknown>;
+            const src: Source = {
+              url: (f.source_url as string) ?? "",
+              title: (f.finding_id as string) ?? "Research Finding",
+              snippet: ((f.content as string) ?? "").slice(0, 200),
+            };
+            sourcesAccum.push(src);
+            updateAssistant(() => ({ sources: [...sourcesAccum] }));
+            break;
+          }
+          case "budget_update":
+          case "knowledge_graph":
+            break;
           case "chunk":
             updateAssistant((m) => {
-              const content = m.content + (event.data.text ?? "");
+              const content = m.content + (event.data.text ?? event.data.token ?? "");
               return {
                 content,
                 renderedHtml: renderStreaming(content),
@@ -160,6 +187,7 @@ export function useStreamSearch({
         }));
       };
 
+      const modeSettings = searchSettings[chatMode] as Record<string, unknown>;
       abortRef.current = streamSearch(
         query,
         currentConvId ?? "default",
@@ -168,9 +196,10 @@ export function useStreamSearch({
         handleDone,
         handleError,
         chatMode,
+        modeSettings,
       );
     },
-    [isStreaming, apiKey, currentConvId, chatMode, setMessages, onComplete],
+    [isStreaming, apiKey, currentConvId, chatMode, searchSettings, setMessages, onComplete],
   );
 
   const abort = useCallback(() => {
