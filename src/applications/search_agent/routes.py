@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 class SearchRequest(BaseModel):
     query: str
     session_id: str | None = None
+    # User-configurable settings (optional, defaults match current behavior)
+    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_sources: int | None = Field(default=None, ge=3, le=15)
+    search_max_results: int | None = Field(default=None, ge=5, le=30)
 
 
 class SearchResponse(BaseModel):
@@ -95,17 +99,31 @@ def create_router(
                         "data": json.dumps({"message": "Searching..."}),
                     }
 
-                    # Step 1: Run web researcher
+                    # Build settings overrides from request
+                    settings_meta: dict[str, Any] = {}
+                    if request.temperature is not None:
+                        settings_meta["temperature"] = request.temperature
+                    if request.max_sources is not None:
+                        settings_meta["max_sources"] = request.max_sources
+                    if request.search_max_results is not None:
+                        settings_meta["search_max_results"] = request.search_max_results
+
+                    # Step 1: Run web researcher (search + fetch + compile)
                     context = AgentContext(
                         user_message=request.query,
                         tenant_id=auth.tenant_id,
                         session_id=request.session_id,
-                        metadata={"refined_queries": [request.query]},
+                        metadata={"refined_queries": [request.query], **settings_meta},
                     )
                     research_result = await web_researcher.run(context)
                     sources: list[dict[str, Any]] = research_result.metadata.get(
                         "sources", []
                     )
+
+                    yield {
+                        "event": StreamEventType.STATUS,
+                        "data": json.dumps({"message": "Reading sources..."}),
+                    }
 
                     # Emit sources as they're available
                     for source in sources:
@@ -116,7 +134,12 @@ def create_router(
 
                     yield {
                         "event": StreamEventType.STATUS,
-                        "data": json.dumps({"message": "Synthesizing..."}),
+                        "data": json.dumps({"message": "Analyzing results..."}),
+                    }
+
+                    yield {
+                        "event": StreamEventType.STATUS,
+                        "data": json.dumps({"message": "Writing answer..."}),
                     }
 
                     # Step 2: Stream synthesizer tokens
@@ -124,7 +147,7 @@ def create_router(
                         user_message=request.query,
                         tenant_id=auth.tenant_id,
                         session_id=request.session_id,
-                        metadata={"sources": sources},
+                        metadata={"sources": sources, **settings_meta},
                     )
                     full_response = ""
                     async for token in synthesizer.stream_run(synth_context):

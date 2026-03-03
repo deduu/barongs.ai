@@ -26,10 +26,15 @@ renderer.code = function (codeOrToken: string | { text: string; lang?: string },
 
 marked.use({ gfm: true, breaks: true, renderer });
 
+/** Strip the LLM-generated trailing Sources section (rendered by SourceCards instead). */
+function stripSourcesSection(text: string): string {
+  return text.replace(/\n---\s*\n#{1,3}\s*Sources[\s\S]*$/i, "").trimEnd();
+}
+
 /** Render markdown during streaming (no citation processing). */
 export function renderStreaming(text: string): string {
   try {
-    let html = marked.parse(text) as string;
+    let html = marked.parse(stripSourcesSection(text)) as string;
     // Make all links open in new tab during streaming too
     html = html.replace(
       /<a\s+href="/g,
@@ -44,7 +49,7 @@ export function renderStreaming(text: string): string {
 /** Render final markdown with citation badges. */
 export function renderFinal(text: string): string {
   try {
-    let html = marked.parse(text) as string;
+    let html = marked.parse(stripSourcesSection(text)) as string;
 
     // [[N]](URL) → marked produces <a href="URL">[N]</a> → convert to cite-badge
     html = html.replace(

@@ -19,12 +19,11 @@ IMPORTANT RULES:
 5. If sources conflict, mention the disagreement and cite both sides.
 6. If no sources are relevant, say so honestly and explain what you do know.
 7. Aim for a response that fully addresses the question — do not cut short.
-8. At the very end of your response, add a "---" separator followed by a "### Sources" section listing all cited sources as numbered markdown links, one per line. Format: 1. [Title](URL)
 
 AVAILABLE SOURCES:
 {sources_text}
 
-Respond with a well-structured, detailed answer using clickable inline citations and a Sources section at the end."""
+Respond with a well-structured, detailed answer using clickable inline citations."""
 
 
 class SynthesizerAgent(Agent):

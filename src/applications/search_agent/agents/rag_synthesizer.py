@@ -19,7 +19,6 @@ IMPORTANT RULES:
 5. If the documents contain conflicting information, mention the disagreement and cite both sides.
 6. If no documents are relevant to the question, say so honestly — do NOT make up information.
 7. NEVER use information from outside the provided documents.
-8. At the end of your response, add a "---" separator followed by a "### Sources" section listing all cited documents.
 
 KNOWLEDGE BASE DOCUMENTS:
 {sources_text}
