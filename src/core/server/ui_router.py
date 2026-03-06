@@ -21,6 +21,11 @@ def create_ui_router(frontend_dir: Path) -> APIRouter:
 
     @router.get("/{path:path}", include_in_schema=False)
     async def serve_spa(path: str) -> FileResponse:
+        # Never intercept API or health routes — let FastAPI handle them
+        if path.startswith(("api/", "health", "ready", "v1/")):
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404)
         file = frontend_dir / path
         if file.is_file():
             return FileResponse(file)

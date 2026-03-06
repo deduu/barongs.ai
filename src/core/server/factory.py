@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.core.middleware.logging import setup_logging
 from src.core.middleware.rate_limit_middleware import RateLimitMiddleware
 from src.core.models.config import AppSettings
+from src.core.server.diagnostics import create_diagnostics_router
 from src.core.server.exception_handlers import (
     GlobalExceptionMiddleware,
     register_exception_handlers,
@@ -81,5 +82,8 @@ def create_app(
     )
     register_exception_handlers(app)
     app.include_router(health_router)
+
+    if settings.environment != "production":
+        app.include_router(create_diagnostics_router())
 
     return app
