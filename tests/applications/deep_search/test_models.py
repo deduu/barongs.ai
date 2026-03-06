@@ -274,7 +274,8 @@ class TestResearchReport:
 class TestDeepSearchEventType:
     def test_all_event_types(self):
         expected = {
-            "status", "planning", "researching", "finding", "reflecting",
+            "status", "disambiguation_required", "disambiguation_confirmed",
+            "planning", "researching", "finding", "reflecting",
             "synthesizing", "chunk", "knowledge_graph", "budget_update",
             "outline_ready", "awaiting_confirmation", "outline_confirmed",
             "done", "error",

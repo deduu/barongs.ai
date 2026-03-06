@@ -32,7 +32,7 @@
 
   /* Layout */
   --sidebar-w:      280px;
-  --sidebar-rail:   64px;
+  --sidebar-rail:   44px;
   --source-w:       380px;
   --header-h:       56px;
   --radius:         14px;
@@ -261,6 +261,14 @@ body {
   0%, 60%, 100% { transform: translateY(0); }
   30%           { transform: translateY(-6px); }
 }
+@keyframes streamTrack {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(330%); }
+}
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.45; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
 
 .animate-slide-up {
   animation: slideUp 0.2s ease;
@@ -276,6 +284,12 @@ body {
 }
 .animate-bounce-dot-3 {
   animation: bounce 1.2s ease-in-out 0.4s infinite;
+}
+.animate-stream-track {
+  animation: streamTrack 1.4s linear infinite;
+}
+.animate-pulse-glow {
+  animation: pulseGlow 1.2s ease-in-out infinite;
 }
 
 /* ── Stagger animation delays ──────────────────────────────── */

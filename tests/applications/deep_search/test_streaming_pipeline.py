@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock
 
@@ -87,11 +88,14 @@ class TestStreamableDeepSearchPipeline:
             metadata={"findings": [{"id": "f1", "content": "test finding"}]},
         ))
 
+        academic_agent = AsyncMock()
+        academic_agent.name = "academic_researcher"
+
         pipeline = StreamableDeepSearchPipeline(
             planner=planner,
             synthesizer=synthesizer,
             strategy=strategy,
-            agents=[],
+            agents=[academic_agent],
         )
 
         context = AgentContext(user_message="test")
@@ -248,6 +252,7 @@ class TestStreamableDeepSearchPipeline:
                     {"finding_id": "f2", "content": "correct entity"},
                 ],
                 "misattributed_ids": ["f1"],
+                "attempted_sources": [{"url": "https://example.com/paper", "status": "finding_extracted"}],
             },
         ))
 
@@ -276,6 +281,7 @@ class TestStreamableDeepSearchPipeline:
         synth_findings = synth_ctx_holder[0].metadata["findings"]
         assert len(synth_findings) == 1
         assert synth_findings[0]["finding_id"] == "f2"
+        assert synth_ctx_holder[0].metadata["attempted_sources"][0]["url"] == "https://example.com/paper"
 
     async def test_planner_uses_orchestrator(self):
         """Verify the planner call goes through an Orchestrator (has timeout)."""
@@ -366,3 +372,182 @@ class TestStreamableDeepSearchPipeline:
 
         # DAG strategy should be called (via orchestrator.run -> strategy.execute)
         strategy.execute.assert_awaited_once()
+
+    async def test_dag_receives_research_budget_from_request(self):
+        planner = AsyncMock()
+        planner.name = "research_planner"
+        planner.run = AsyncMock(return_value=AgentResult(
+            agent_name="research_planner",
+            response="Plan",
+            metadata={"research_plan": {
+                "original_query": "test",
+                "tasks": [{"task_id": "t1", "query": "q", "task_type": "secondary_web", "depends_on": [], "agent_name": "deep_web_researcher"}],
+                "max_iterations": 1,
+            }},
+        ))
+
+        strategy = AsyncMock()
+        strategy.execute = AsyncMock(return_value=AgentResult(
+            agent_name="research_dag",
+            response="Done",
+            metadata={"findings": []},
+        ))
+
+        synthesizer = AsyncMock()
+
+        async def mock_stream(ctx):
+            yield "Report."
+
+        synthesizer.stream_run = mock_stream
+
+        pipeline = StreamableDeepSearchPipeline(
+            planner=planner,
+            synthesizer=synthesizer,
+            strategy=strategy,
+            agents=[],
+            research_max_llm_tokens=12345,
+            research_max_api_calls=77,
+            research_max_time_seconds=999,
+        )
+
+        context = AgentContext(
+            user_message="test",
+            metadata={"max_time_seconds": 180, "max_iterations": 4},
+        )
+        async for _ in pipeline.stream_run(context):
+            pass
+
+        strategy_ctx = strategy.execute.await_args.args[1]
+        budget = strategy_ctx.metadata["research_budget"]
+        assert budget["max_time_seconds"] == 180.0
+        assert budget["max_llm_tokens"] == 12345
+        assert budget["max_api_calls"] == 77
+        assert strategy_ctx.metadata["research_plan"]["max_iterations"] == 4
+
+    async def test_pipeline_adds_academic_task_when_enabled_and_missing(self):
+        planner = AsyncMock()
+        planner.name = "research_planner"
+        planner.run = AsyncMock(return_value=AgentResult(
+            agent_name="research_planner",
+            response="Plan",
+            metadata={"research_plan": {
+                "original_query": "test",
+                "tasks": [{"task_id": "t1", "query": "q", "task_type": "secondary_web", "depends_on": [], "agent_name": "deep_web_researcher"}],
+                "max_iterations": 1,
+            }},
+        ))
+
+        strategy = AsyncMock()
+        strategy.execute = AsyncMock(return_value=AgentResult(
+            agent_name="research_dag",
+            response="Done",
+            metadata={"findings": []},
+        ))
+
+        synthesizer = AsyncMock()
+
+        async def mock_stream(ctx):
+            yield "Report."
+
+        synthesizer.stream_run = mock_stream
+
+        academic_agent = AsyncMock()
+        academic_agent.name = "academic_researcher"
+
+        pipeline = StreamableDeepSearchPipeline(
+            planner=planner,
+            synthesizer=synthesizer,
+            strategy=strategy,
+            agents=[academic_agent],
+        )
+
+        context = AgentContext(
+            user_message="OpenClaw safety",
+            metadata={"enable_academic_search": True},
+        )
+        async for _ in pipeline.stream_run(context):
+            pass
+
+        strategy_ctx = strategy.execute.await_args.args[1]
+        tasks = strategy_ctx.metadata["research_plan"]["tasks"]
+        assert any(task["agent_name"] == "academic_researcher" for task in tasks)
+        assert any(task["task_type"] == "secondary_academic" for task in tasks)
+
+    async def test_pipeline_emits_task_progress_updates(self):
+        planner = AsyncMock()
+        planner.name = "research_planner"
+        planner.run = AsyncMock(return_value=AgentResult(
+            agent_name="research_planner",
+            response="Plan",
+            metadata={"research_plan": {
+                "original_query": "test",
+                "tasks": [{"task_id": "t1", "query": "q", "task_type": "secondary_web", "depends_on": [], "agent_name": "deep_web_researcher"}],
+                "max_iterations": 1,
+            }},
+        ))
+
+        from src.core.orchestrator.strategies.research_dag import ResearchDAGStrategy
+
+        strategy = ResearchDAGStrategy()
+        researcher = AsyncMock()
+        researcher.name = "deep_web_researcher"
+        researcher.run = AsyncMock(return_value=AgentResult(
+            agent_name="deep_web_researcher",
+            response="Done",
+            metadata={"findings": [{"finding_id": "f1"}]},
+        ))
+
+        synthesizer = AsyncMock()
+
+        async def mock_stream(ctx):
+            yield "Report."
+
+        synthesizer.stream_run = mock_stream
+
+        pipeline = StreamableDeepSearchPipeline(
+            planner=planner,
+            synthesizer=synthesizer,
+            strategy=strategy,
+            agents=[researcher],
+        )
+
+        context = AgentContext(user_message="test")
+        events = []
+        async for event in pipeline.stream_run(context):
+            events.append(event)
+
+        researching_events = [e for e in events if e["event"] == DeepSearchEventType.RESEARCHING]
+        assert any("running" in e["data"].get("status", "") for e in researching_events)
+        assert any(e["data"].get("task_id") == "t1" for e in researching_events)
+
+    async def test_pipeline_emits_clear_timeout_error(self):
+        planner = AsyncMock()
+        planner.name = "research_planner"
+        planner.run = AsyncMock(return_value=AgentResult(
+            agent_name="research_planner",
+            response="Plan",
+            metadata={"research_plan": {"original_query": "test", "tasks": [], "max_iterations": 1}},
+        ))
+
+        synthesizer = AsyncMock()
+
+        async def broken_stream(_ctx):
+            raise asyncio.TimeoutError
+            yield "never"
+
+        synthesizer.stream_run = broken_stream
+
+        pipeline = StreamableDeepSearchPipeline(
+            planner=planner,
+            synthesizer=synthesizer,
+            strategy=AsyncMock(),
+            agents=[],
+        )
+
+        context = AgentContext(user_message="test")
+        events = []
+        async for event in pipeline.stream_run(context):
+            events.append(event)
+
+        assert events[-1]["event"] == DeepSearchEventType.ERROR
+        assert "timed out before completion" in events[-1]["data"]["error"]

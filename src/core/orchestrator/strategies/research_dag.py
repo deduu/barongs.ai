@@ -28,14 +28,18 @@ class ResearchDAGStrategy:
         on_task_complete: TaskCallback | None = None,
         on_budget_update: BudgetCallback | None = None,
         max_iterations: int = 3,
+        per_agent_timeout: float = 120.0,
     ) -> None:
         self._on_task_complete = on_task_complete
         self._on_budget_update = on_budget_update
         self._max_iterations = max_iterations
+        self._per_agent_timeout = per_agent_timeout
 
     async def execute(self, agents: list[Agent], context: AgentContext) -> AgentResult:
         plan_data = context.metadata.get("research_plan", {})
         budget_data = context.metadata.get("research_budget")
+        if not isinstance(budget_data, dict):
+            budget_data = None
 
         tasks: list[dict[str, Any]] = list(plan_data.get("tasks", []))
         max_iter = plan_data.get("max_iterations", self._max_iterations)
@@ -44,8 +48,20 @@ class ResearchDAGStrategy:
         task_statuses: dict[str, str] = {t["task_id"]: "pending" for t in tasks}
         failed_tasks: set[str] = set()
         all_results: list[AgentResult] = []
+        loop = asyncio.get_running_loop()
+        run_started = loop.time()
+        initial_used_time = (
+            float(budget_data.get("used_time_seconds", 0.0))
+            if budget_data
+            else 0.0
+        )
 
         for _iteration in range(max_iter):
+            self._update_used_time(
+                budget_data,
+                run_started=run_started,
+                initial_used_time=initial_used_time,
+            )
             if budget_data and self._is_exhausted(budget_data):
                 logger.info("Budget exhausted, stopping execution")
                 break
@@ -59,6 +75,8 @@ class ResearchDAGStrategy:
                 context,
                 budget_data,
                 all_results,
+                run_started,
+                initial_used_time,
             )
 
             if not made_progress:
@@ -79,6 +97,24 @@ class ResearchDAGStrategy:
 
         return self._merge_results(all_results)
 
+    @staticmethod
+    async def _emit_context_task_progress(
+        context: AgentContext,
+        payload: dict[str, Any],
+    ) -> None:
+        callback = context.metadata.get("_task_progress_callback")
+        if callable(callback):
+            await callback(payload)
+
+    @staticmethod
+    async def _emit_context_budget_update(
+        context: AgentContext,
+        payload: dict[str, Any],
+    ) -> None:
+        callback = context.metadata.get("_budget_progress_callback")
+        if callable(callback):
+            await callback(payload)
+
     async def _execute_all_waves(
         self,
         tasks: list[dict[str, Any]],
@@ -88,16 +124,27 @@ class ResearchDAGStrategy:
         context: AgentContext,
         budget_data: dict[str, Any] | None,
         all_results: list[AgentResult],
+        run_started: float,
+        initial_used_time: float,
     ) -> bool:
         """Execute waves until no more pending tasks can run. Returns True if any work was done."""
         any_work_done = False
 
         while True:
+            self._update_used_time(
+                budget_data,
+                run_started=run_started,
+                initial_used_time=initial_used_time,
+            )
             if budget_data and self._is_exhausted(budget_data):
                 break
 
             wave = self._next_ready_wave(tasks, task_statuses, failed_tasks)
             if not wave:
+                break
+
+            remaining_time = self._remaining_time_seconds(budget_data)
+            if remaining_time is not None and remaining_time <= 0:
                 break
 
             coros = []
@@ -110,6 +157,21 @@ class ResearchDAGStrategy:
 
                 task_statuses[task["task_id"]] = "running"
                 wave_task_ids.append(task["task_id"])
+                logger.info(
+                    "Research task started: task_id=%s agent=%s query=%s",
+                    task["task_id"],
+                    agent_name,
+                    task.get("query", ""),
+                )
+                await self._emit_context_task_progress(
+                    context,
+                    {
+                        "task_id": task["task_id"],
+                        "status": "running",
+                        "agent_name": agent_name,
+                        "query": task.get("query", ""),
+                    },
+                )
 
                 task_context = context.model_copy(
                     update={
@@ -119,27 +181,69 @@ class ResearchDAGStrategy:
                             "task_id": task["task_id"],
                             "task_type": task["task_type"],
                             "all_findings": [r.metadata.get("findings", []) for r in all_results],
+                            "agent_timeout_seconds": (
+                                min(self._per_agent_timeout, remaining_time)
+                                if remaining_time is not None
+                                else self._per_agent_timeout
+                            ),
                         },
                     }
                 )
-                coros.append(self._run_agent(agent_map[agent_name], task_context))
+                coros.append(
+                    self._run_agent(
+                        agent_map[agent_name],
+                        task_context,
+                        remaining_time=remaining_time,
+                    )
+                )
 
             if not coros:
                 break
 
             results = await asyncio.gather(*coros, return_exceptions=True)
             any_work_done = True
+            self._update_used_time(
+                budget_data,
+                run_started=run_started,
+                initial_used_time=initial_used_time,
+            )
 
             for task_id, result in zip(wave_task_ids, results, strict=True):
                 if isinstance(result, BaseException):
                     logger.error("Task %s failed: %s", task_id, result)
                     task_statuses[task_id] = "failed"
                     failed_tasks.add(task_id)
+                    await self._emit_context_task_progress(
+                        context,
+                        {
+                            "task_id": task_id,
+                            "status": "failed",
+                            "error": str(result),
+                        },
+                    )
                     if self._on_task_complete:
                         await self._on_task_complete(task_id, None, "failed")
                 else:
                     task_statuses[task_id] = "completed"
                     all_results.append(result)
+                    findings = result.metadata.get("findings", [])
+                    finding_count = len(findings) if isinstance(findings, list) else 0
+                    logger.info(
+                        "Research task completed: task_id=%s agent=%s findings=%s",
+                        task_id,
+                        result.agent_name,
+                        finding_count,
+                    )
+                    await self._emit_context_task_progress(
+                        context,
+                        {
+                            "task_id": task_id,
+                            "status": "completed",
+                            "agent_name": result.agent_name,
+                            "response": result.response,
+                            "finding_count": finding_count,
+                        },
+                    )
                     if self._on_task_complete:
                         await self._on_task_complete(task_id, result, "completed")
 
@@ -149,14 +253,40 @@ class ResearchDAGStrategy:
                             budget_data.get("used_llm_tokens", 0) + tokens
                         )
                         budget_data["used_api_calls"] = budget_data.get("used_api_calls", 0) + 1
+                        await self._emit_context_budget_update(context, budget_data.copy())
                         if self._on_budget_update:
                             await self._on_budget_update(budget_data)
 
         return any_work_done
 
-    @staticmethod
-    async def _run_agent(agent: Agent, context: AgentContext) -> AgentResult:
-        return await agent.run(context)
+    async def _run_agent(
+        self,
+        agent: Agent,
+        context: AgentContext,
+        *,
+        remaining_time: float | None = None,
+    ) -> AgentResult:
+        effective_timeout = self._per_agent_timeout
+        if remaining_time is not None:
+            if remaining_time <= 0:
+                return AgentResult(
+                    agent_name=agent.name,
+                    response="Agent skipped due to exhausted time budget.",
+                    metadata={"findings": [], "timed_out": True, "budget_exhausted": True},
+                )
+            effective_timeout = min(self._per_agent_timeout, remaining_time)
+
+        try:
+            return await asyncio.wait_for(
+                agent.run(context), timeout=effective_timeout
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Agent %s timed out after %.1fs", agent.name, effective_timeout)
+            return AgentResult(
+                agent_name=agent.name,
+                response=f"Agent timed out after {effective_timeout:.1f}s",
+                metadata={"findings": [], "timed_out": True, "timeout_seconds": effective_timeout},
+            )
 
     @staticmethod
     def _is_exhausted(budget: dict[str, Any]) -> bool:
@@ -166,6 +296,26 @@ class ResearchDAGStrategy:
             or budget.get("used_time_seconds", 0) >= budget.get("max_time_seconds", float("inf"))
         )
         return exhausted
+
+    @staticmethod
+    def _remaining_time_seconds(budget: dict[str, Any] | None) -> float | None:
+        if not budget:
+            return None
+        max_time = float(budget.get("max_time_seconds", float("inf")))
+        used_time = float(budget.get("used_time_seconds", 0.0))
+        return max_time - used_time
+
+    @staticmethod
+    def _update_used_time(
+        budget: dict[str, Any] | None,
+        *,
+        run_started: float,
+        initial_used_time: float,
+    ) -> None:
+        if not budget:
+            return
+        elapsed = asyncio.get_running_loop().time() - run_started
+        budget["used_time_seconds"] = initial_used_time + max(0.0, elapsed)
 
     @staticmethod
     def _next_ready_wave(
@@ -203,6 +353,7 @@ class ResearchDAGStrategy:
 
         all_findings: list[Any] = []
         all_misattributed: list[str] = []
+        attempted_sources: list[dict[str, Any]] = []
         for r in results:
             findings = r.metadata.get("findings", [])
             if isinstance(findings, list):
@@ -210,6 +361,11 @@ class ResearchDAGStrategy:
             mis_ids = r.metadata.get("misattributed_ids", [])
             if isinstance(mis_ids, list):
                 all_misattributed.extend(mis_ids)
+            sources = r.metadata.get("attempted_sources", [])
+            if isinstance(sources, list):
+                for source in sources:
+                    if isinstance(source, dict):
+                        attempted_sources.append(source)
 
         return AgentResult(
             agent_name="research_dag",
@@ -218,6 +374,7 @@ class ResearchDAGStrategy:
                 "sources": [r.agent_name for r in results],
                 "findings": all_findings,
                 "misattributed_ids": all_misattributed,
+                "attempted_sources": attempted_sources,
             },
             token_usage=combined_tokens,
         )

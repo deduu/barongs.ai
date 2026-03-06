@@ -12,6 +12,8 @@ class TestDeepSearchSettings:
         assert settings.deep_crawler_max_pages == 10
         assert settings.research_max_iterations == 3
         assert settings.research_max_time_seconds == 300
+        assert settings.research_per_agent_timeout_seconds == 120.0
+        assert settings.stream_max_concurrent_requests == 100
         assert settings.code_execution_enabled is False
         assert settings.docker_network_disabled is True
         assert settings.docker_image == "python:3.11-slim"

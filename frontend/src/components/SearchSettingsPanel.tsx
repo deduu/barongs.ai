@@ -36,7 +36,7 @@ export default function SearchSettingsPanel({
 }: SearchSettingsPanelProps) {
   const [editMode, setEditMode] = useState<ChatMode>(chatMode);
   const [showSaved, setShowSaved] = useState(false);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const isFirstRender = useRef(true);
   const activePreset = getActivePreset(editMode);
   const modeSettings = settings[editMode];

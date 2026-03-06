@@ -4,6 +4,7 @@ import type { SearchSettings } from "../lib/searchSettings";
 import {
   streamSearch,
   confirmOutline,
+  confirmDisambiguation,
   type OutlineSection,
   type RAGSourceData,
   type ResearchTask,
@@ -17,6 +18,12 @@ export interface OutlineData {
   researchMode: string;
   sections: OutlineSection[];
   researchTasks: ResearchTask[];
+}
+
+export interface DisambiguationData {
+  sessionId: string;
+  entityName: string;
+  message: string;
 }
 
 interface UseStreamSearchOptions {
@@ -50,7 +57,11 @@ export function useStreamSearch({
 }: UseStreamSearchOptions) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [streamStartedAt, setStreamStartedAt] = useState<number | null>(null);
+  const [lastEventAt, setLastEventAt] = useState<number | null>(null);
+  const [eventCount, setEventCount] = useState(0);
   const [outlineData, setOutlineData] = useState<OutlineData | null>(null);
+  const [disambiguationData, setDisambiguationData] = useState<DisambiguationData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
@@ -79,6 +90,10 @@ export function useStreamSearch({
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
+      const startedAt = Date.now();
+      setStreamStartedAt(startedAt);
+      setLastEventAt(startedAt);
+      setEventCount(0);
       setStatusMessage(
         chatMode === "rag"
           ? "Searching knowledge base\u2026"
@@ -89,6 +104,7 @@ export function useStreamSearch({
 
       // Accumulate sources in a local ref to avoid stale closures
       const sourcesAccum: Source[] = [];
+      const streamSessionId = chatMode === "deep_search" ? assistantId : (currentConvId ?? "default");
 
       const updateAssistant = (
         updater: (msg: Message) => Partial<Message>,
@@ -99,9 +115,14 @@ export function useStreamSearch({
       };
 
       const handleEvent = (event: StreamEvent) => {
+        setLastEventAt(Date.now());
+        setEventCount((prev) => prev + 1);
+        if (chatMode === "deep_search" && event.type !== "chunk") {
+          console.info("[deep-search:event]", event.type, event.data);
+        }
         switch (event.type) {
           case "status":
-            setStatusMessage(event.data.message ?? "");
+            setStatusMessage(event.data.status ?? event.data.message ?? "");
             break;
           case "source": {
             const src =
@@ -118,11 +139,24 @@ export function useStreamSearch({
           case "synthesizing":
             setStatusMessage(event.data.status ?? event.data.message ?? "Processing\u2026");
             break;
+          case "disambiguation_required":
+            setDisambiguationData({
+              sessionId: event.data.session_id ?? "",
+              entityName: event.data.entity_name ?? "",
+              message: event.data.message ?? "Clarify which entity you mean before research continues.",
+            });
+            setStatusMessage("Waiting for clarification\u2026");
+            break;
+          case "disambiguation_confirmed":
+            setDisambiguationData(null);
+            setStatusMessage(event.data.message ?? "Clarification received\u2026");
+            break;
           case "finding": {
             const f = (event.data.finding ?? event.data) as Record<string, unknown>;
+            const citations = Array.isArray(f.citations) ? f.citations : [];
             const src: Source = {
               url: (f.source_url as string) ?? "",
-              title: (f.finding_id as string) ?? "Research Finding",
+              title: (citations[0] as string) ?? (f.finding_id as string) ?? "Research Finding",
               snippet: ((f.content as string) ?? "").slice(0, 200),
             };
             sourcesAccum.push(src);
@@ -185,9 +219,10 @@ export function useStreamSearch({
             break;
           }
           case "error":
+            console.error("[stream:error]", event.data);
             updateAssistant(() => ({
-              content: event.data.message ?? "An error occurred",
-              renderedHtml: `<span style="color:#ef4444;">${event.data.message ?? "An error occurred"}</span>`,
+              content: event.data.error ?? event.data.message ?? "An error occurred",
+              renderedHtml: `<span style="color:#ef4444;">${event.data.error ?? event.data.message ?? "An error occurred"}</span>`,
               status: "error",
             }));
             break;
@@ -195,6 +230,9 @@ export function useStreamSearch({
       };
 
       const handleDone = () => {
+        if (chatMode === "deep_search") {
+          console.info("[deep-search:event]", "done");
+        }
         // Ensure status is "done" if still streaming
         updateAssistant((m) => {
           if (m.status === "streaming") {
@@ -207,11 +245,17 @@ export function useStreamSearch({
         });
         setIsStreaming(false);
         setStatusMessage("");
+        setStreamStartedAt(null);
+        setLastEventAt(null);
+        setEventCount(0);
+        setOutlineData(null);
+        setDisambiguationData(null);
         abortRef.current = null;
         onComplete();
       };
 
       const handleError = (err: string) => {
+        console.error("[stream:error]", err);
         updateAssistant(() => ({
           content: err,
           renderedHtml: `<span style="color:#ef4444;">${err}</span>`,
@@ -222,7 +266,7 @@ export function useStreamSearch({
       const modeSettings = searchSettings[chatMode] as unknown as Record<string, unknown>;
       abortRef.current = streamSearch(
         query,
-        currentConvId ?? "default",
+        streamSessionId,
         apiKey,
         handleEvent,
         handleDone,
@@ -237,6 +281,8 @@ export function useStreamSearch({
   const abort = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    setOutlineData(null);
+    setDisambiguationData(null);
   }, []);
 
   const submitOutline = useCallback(
@@ -260,5 +306,52 @@ export function useStreamSearch({
     [outlineData, apiKey],
   );
 
-  return { isStreaming, statusMessage, outlineData, send, abort, submitOutline } as const;
+  const submitDisambiguation = useCallback(
+    async (clarification: string) => {
+      if (!disambiguationData) return;
+      try {
+        await confirmDisambiguation(
+          disambiguationData.sessionId,
+          apiKey,
+          clarification,
+        );
+      } catch (e) {
+        console.error("Failed to confirm disambiguation:", e);
+      }
+    },
+    [disambiguationData, apiKey],
+  );
+
+  const regenerate = useCallback(() => {
+    if (isStreaming) return;
+    let query = "";
+    setMessages((prev) => {
+      // Find last user message from the end
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].role === "user") {
+          query = prev[i].content;
+          // Remove the user message and everything after it
+          return prev.slice(0, i);
+        }
+      }
+      return prev;
+    });
+    // send() will re-add the user message + a new assistant message
+    if (query) setTimeout(() => send(query), 0);
+  }, [isStreaming, send, setMessages]);
+
+  return {
+    isStreaming,
+    statusMessage,
+    streamStartedAt,
+    lastEventAt,
+    eventCount,
+    outlineData,
+    disambiguationData,
+    send,
+    abort,
+    submitOutline,
+    submitDisambiguation,
+    regenerate,
+  } as const;
 }

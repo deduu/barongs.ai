@@ -39,7 +39,7 @@ class TestDeepSynthesizerAgent:
         llm = AsyncMock()
 
         async def mock_stream(*args, **kwargs):
-            for token in ["Hello", " ", "World"]:
+            for token in ["# Executive Summary\nSee [[f1]](https://a.com).\n\n## References\n1. [[f1]](https://a.com)"]:
                 yield token
 
         llm.stream = mock_stream
@@ -47,14 +47,14 @@ class TestDeepSynthesizerAgent:
         agent = DeepSynthesizerAgent(llm_provider=llm)
         context = AgentContext(
             user_message="Summarize",
-            metadata={"findings": []},
+            metadata={"findings": [{"finding_id": "f1", "content": "detail", "source_url": "https://a.com", "confidence": 0.8}]},
         )
 
         tokens = []
         async for token in agent.stream_run(context):
             tokens.append(token)
 
-        assert tokens == ["Hello", " ", "World"]
+        assert "".join(tokens).startswith("# Executive Summary")
 
     async def test_filters_misattributed_findings(self):
         llm = AsyncMock()
@@ -102,20 +102,15 @@ class TestDeepSynthesizerAgent:
 
     async def test_low_relevance_guard_no_findings(self):
         llm = AsyncMock()
-        llm.generate = AsyncMock(return_value=LLMResponse(content="No info found.", model="test", usage={"total_tokens": 30}))
-
         agent = DeepSynthesizerAgent(llm_provider=llm)
         context = AgentContext(user_message="test", metadata={"findings": []})
-        await agent.run(context)
+        result = await agent.run(context)
 
-        call_args = llm.generate.call_args[0][0]
-        assert "WARNING" in call_args.system_prompt
-        assert "Do NOT fabricate" in call_args.system_prompt
+        llm.generate.assert_not_called()
+        assert "No verified findings" in result.response
 
     async def test_low_relevance_guard_all_filtered(self):
         llm = AsyncMock()
-        llm.generate = AsyncMock(return_value=LLMResponse(content="No info.", model="test", usage={"total_tokens": 30}))
-
         agent = DeepSynthesizerAgent(llm_provider=llm)
         findings = [
             {"finding_id": "f1", "content": "Wrong", "source_url": "https://wrong.com", "confidence": 0.5},
@@ -124,20 +119,140 @@ class TestDeepSynthesizerAgent:
             user_message="test",
             metadata={"findings": findings, "misattributed_ids": ["f1"]},
         )
-        await agent.run(context)
+        result = await agent.run(context)
 
-        call_args = llm.generate.call_args[0][0]
-        assert "WARNING" in call_args.system_prompt
+        llm.generate.assert_not_called()
+        assert "No verified findings" in result.response
 
     async def test_no_findings_still_produces_output(self):
         llm = AsyncMock()
-        llm.generate = AsyncMock(return_value=LLMResponse(
-            content="No findings were available for this query.",
-            model="test",
-        ))
-
         agent = DeepSynthesizerAgent(llm_provider=llm)
         context = AgentContext(user_message="test", metadata={"findings": []})
         result = await agent.run(context)
 
         assert len(result.response) > 0
+        llm.generate.assert_not_called()
+
+    async def test_auto_appends_references_when_missing(self):
+        llm = AsyncMock()
+        llm.generate = AsyncMock(return_value=LLMResponse(
+            content="# Abstract\nSome analysis without refs.",
+            model="test",
+            usage={"total_tokens": 40},
+        ))
+
+        agent = DeepSynthesizerAgent(llm_provider=llm)
+        context = AgentContext(
+            user_message="OpenClaw safety",
+            metadata={
+                "research_mode": "academic",
+                "findings": [
+                    {
+                        "finding_id": "f1",
+                        "content": "Safety protocols discussed.",
+                        "source_url": "https://example.org/paper",
+                        "citations": ["Paper Title"],
+                        "confidence": 0.8,
+                    }
+                ],
+            },
+        )
+        result = await agent.run(context)
+
+        assert "## References" in result.response
+        assert "https://example.org/paper" in result.response
+
+    async def test_prompt_includes_reference_catalog_and_citation_format(self):
+        llm = AsyncMock()
+        llm.generate = AsyncMock(return_value=LLMResponse(
+            content="ok",
+            model="test",
+            usage={"total_tokens": 10},
+        ))
+        agent = DeepSynthesizerAgent(llm_provider=llm)
+        context = AgentContext(
+            user_message="OpenClaw safety",
+            metadata={
+                "research_mode": "academic",
+                "findings": [
+                    {
+                        "finding_id": "f1",
+                        "content": "Safety detail",
+                        "source_url": "https://example.org/paper",
+                        "confidence": 0.8,
+                    }
+                ],
+            },
+        )
+
+        await agent.run(context)
+        request = llm.generate.call_args[0][0]
+        assert "REFERENCE CATALOG" in request.system_prompt
+        assert "[[finding_id]](URL)" in request.system_prompt
+
+    async def test_no_findings_uses_attempted_sources_as_search_log_references(self):
+        llm = AsyncMock()
+        agent = DeepSynthesizerAgent(llm_provider=llm)
+        context = AgentContext(
+            user_message="OpenClaw safety",
+            metadata={
+                "findings": [],
+                "attempted_sources": [
+                    {"url": "https://scholar.google.com/some-paper", "title": "Scholar Result", "status": "crawl_timeout"},
+                ],
+            },
+        )
+
+        result = await agent.run(context)
+        llm.generate.assert_not_called()
+        assert "## Search Log References" in result.response
+
+    async def test_no_findings_appends_search_log_when_references_heading_has_no_urls(self):
+        llm = AsyncMock()
+        agent = DeepSynthesizerAgent(llm_provider=llm)
+        context = AgentContext(
+            user_message="OpenClaw safety",
+            metadata={
+                "findings": [],
+                "attempted_sources": [
+                    {"url": "https://example.com/paper1", "title": "Paper 1", "status": "crawl_timeout"},
+                ],
+            },
+        )
+
+        result = await agent.run(context)
+        llm.generate.assert_not_called()
+        assert "## Search Log References" in result.response
+        assert "https://example.com/paper1" in result.response
+
+    async def test_findings_also_append_search_log_references(self):
+        llm = AsyncMock()
+        llm.generate = AsyncMock(return_value=LLMResponse(
+            content="# Abstract\nSupported claim [[f1]](https://example.org/paper).",
+            model="test",
+            usage={"total_tokens": 20},
+        ))
+
+        agent = DeepSynthesizerAgent(llm_provider=llm)
+        context = AgentContext(
+            user_message="OpenClaw safety",
+            metadata={
+                "research_mode": "academic",
+                "findings": [
+                    {
+                        "finding_id": "f1",
+                        "content": "Safety detail",
+                        "source_url": "https://example.org/paper",
+                        "citations": ["Paper Title"],
+                        "confidence": 0.8,
+                    }
+                ],
+                "attempted_sources": [
+                    {"url": "https://example.com/paper2", "title": "Paper 2", "status": "crawl_timeout"},
+                ],
+            },
+        )
+
+        result = await agent.run(context)
+        assert "## Search Log References" in result.response
+        assert "https://example.com/paper2" in result.response

@@ -1,13 +1,14 @@
 import { useCallback, useState } from "react";
-import { CopyIcon, CheckIcon, ThumbsUpIcon, ThumbsDownIcon } from "./icons";
+import { CopyIcon, CheckIcon, ThumbsUpIcon, ThumbsDownIcon, RotateCcwIcon } from "./icons";
 import { getItem, setItem } from "../lib/storage";
 
 interface MessageActionsProps {
   messageId: string;
   rawContent: string;
+  onRegenerate?: () => void;
 }
 
-export default function MessageActions({ messageId, rawContent }: MessageActionsProps) {
+export default function MessageActions({ messageId, rawContent, onRegenerate }: MessageActionsProps) {
   const [copied, setCopied] = useState(false);
   const feedbackKey = `feedback_${messageId}`;
   const [feedback, setFeedback] = useState<"up" | "down" | null>(
@@ -67,6 +68,18 @@ export default function MessageActions({ messageId, rawContent }: MessageActions
       >
         <ThumbsDownIcon size={14} />
       </button>
+
+      {onRegenerate && (
+        <button
+          className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--surface-2)]"
+          style={{ color: "var(--text-muted)" }}
+          onClick={onRegenerate}
+          title="Regenerate"
+          aria-label="Regenerate response"
+        >
+          <RotateCcwIcon size={14} />
+        </button>
+      )}
     </div>
   );
 }

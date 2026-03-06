@@ -8,18 +8,26 @@ interface MessageListProps {
   messages: Message[];
   isStreaming: boolean;
   statusMessage: string;
+  streamStartedAt: number | null;
+  lastEventAt: number | null;
+  eventCount: number;
   selectedModel: string;
   chatMode: ChatMode;
   onSourceClick: (source: Source) => void;
+  onRegenerate?: () => void;
 }
 
 export default function MessageList({
   messages,
   isStreaming,
   statusMessage,
+  streamStartedAt,
+  lastEventAt,
+  eventCount,
   selectedModel,
   chatMode,
   onSourceClick,
+  onRegenerate,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -62,12 +70,18 @@ export default function MessageList({
       >
         <div className="mx-auto max-w-3xl">
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} selectedModel={selectedModel} onSourceClick={onSourceClick} />
+            <MessageBubble key={msg.id} message={msg} selectedModel={selectedModel} onSourceClick={onSourceClick} onRegenerate={onRegenerate} />
           ))}
 
           {/* Status indicator during streaming */}
-          {isStreaming && statusMessage && (
-            <StatusIndicator message={statusMessage} chatMode={chatMode} />
+          {isStreaming && (
+            <StatusIndicator
+              message={statusMessage || "Processing request\u2026"}
+              chatMode={chatMode}
+              startedAt={streamStartedAt}
+              lastEventAt={lastEventAt}
+              eventCount={eventCount}
+            />
           )}
         </div>
       </div>

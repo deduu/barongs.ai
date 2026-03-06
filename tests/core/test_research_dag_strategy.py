@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
 
 from src.applications.deep_search.models.research import (
@@ -198,6 +199,72 @@ class TestResearchDAGStrategyBudget:
         assert not agent_a.run.called
         assert not agent_b.run.called
 
+    async def test_remaining_budget_limits_agent_runtime(self):
+        task = ResearchTask(
+            task_id="t1",
+            query="A",
+            task_type=ResearchTaskType.SECONDARY_WEB,
+            agent_name="agent_a",
+        )
+        plan = ResearchPlan(original_query="test", tasks=[task])
+        budget = ResearchBudget(max_time_seconds=1, used_time_seconds=0.95)
+
+        agent = AsyncMock(spec=Agent)
+        agent.name = "agent_a"
+
+        async def _slow_run(_ctx: AgentContext) -> AgentResult:
+            await asyncio.sleep(0.2)
+            return AgentResult(agent_name="agent_a", response="done")
+
+        agent.run = AsyncMock(side_effect=_slow_run)
+
+        strategy = ResearchDAGStrategy(per_agent_timeout=5.0)
+        context = AgentContext(
+            user_message="test",
+            metadata={
+                "research_plan": plan.model_dump(),
+                "research_budget": budget.model_dump(),
+            },
+        )
+
+        result = await strategy.execute([agent], context)
+        assert "timed out" in result.response.lower()
+
+    async def test_agent_timeout_seconds_passed_to_agent_context(self):
+        task = ResearchTask(
+            task_id="t1",
+            query="A",
+            task_type=ResearchTaskType.SECONDARY_WEB,
+            agent_name="agent_a",
+        )
+        plan = ResearchPlan(original_query="test", tasks=[task])
+        budget = ResearchBudget(max_time_seconds=30, used_time_seconds=0)
+
+        captured_contexts: list[AgentContext] = []
+        agent = AsyncMock(spec=Agent)
+        agent.name = "agent_a"
+
+        async def _run(ctx: AgentContext) -> AgentResult:
+            captured_contexts.append(ctx)
+            return AgentResult(agent_name="agent_a", response="done")
+
+        agent.run = AsyncMock(side_effect=_run)
+
+        strategy = ResearchDAGStrategy(per_agent_timeout=5.0)
+        context = AgentContext(
+            user_message="test",
+            metadata={
+                "research_plan": plan.model_dump(),
+                "research_budget": budget.model_dump(),
+            },
+        )
+        await strategy.execute([agent], context)
+
+        assert captured_contexts
+        timeout_hint = captured_contexts[0].metadata.get("agent_timeout_seconds")
+        assert isinstance(timeout_hint, float)
+        assert 0 < timeout_hint <= 5.0
+
 
 class TestResearchDAGStrategyFailedTask:
     async def test_failed_task_skips_dependents(self):
@@ -274,6 +341,32 @@ class TestResearchDAGStrategyCallbacks:
 
         assert budget_cb.called
 
+    async def test_metadata_progress_callbacks(self):
+        task = ResearchTask(
+            task_id="t1", query="A", task_type=ResearchTaskType.SECONDARY_WEB,
+            agent_name="agent_a",
+        )
+        plan = ResearchPlan(original_query="test", tasks=[task])
+
+        task_cb = AsyncMock()
+        budget_cb = AsyncMock()
+        agent = _make_agent("agent_a", metadata={"findings": [{"id": "f1"}]})
+
+        strategy = ResearchDAGStrategy()
+        context = AgentContext(
+            user_message="test",
+            metadata={
+                "research_plan": plan.model_dump(),
+                "research_budget": ResearchBudget().model_dump(),
+                "_task_progress_callback": task_cb,
+                "_budget_progress_callback": budget_cb,
+            },
+        )
+        await strategy.execute([agent], context)
+
+        assert task_cb.await_count >= 2
+        assert budget_cb.called
+
 
 class TestResearchDAGStrategyReflection:
     async def test_reflection_loop_adds_new_tasks(self):
@@ -347,6 +440,7 @@ class TestResearchDAGStrategyMerge:
 
         web_agent = _make_agent("web_researcher", metadata={
             "findings": [{"finding_id": "f1"}, {"finding_id": "f2"}],
+            "attempted_sources": [{"url": "https://a.example", "status": "finding_extracted"}],
         })
         fact_agent = _make_agent("fact_checker", metadata={
             "checked_findings": [],
@@ -361,3 +455,4 @@ class TestResearchDAGStrategyMerge:
         result = await strategy.execute([web_agent, fact_agent], context)
 
         assert "f1" in result.metadata.get("misattributed_ids", [])
+        assert result.metadata.get("attempted_sources")

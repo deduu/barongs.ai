@@ -7,10 +7,15 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>]/g, (c) => map[c] ?? c);
 }
 
-/* Configure marked once */
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
 const renderer = new marked.Renderer();
 renderer.code = function (codeOrToken: string | { text: string; lang?: string }, lang?: string): string {
-  // Handle both marked v4 (string args) and v12+ (token object)
   const text = typeof codeOrToken === "object" ? codeOrToken.text : codeOrToken;
   const language = typeof codeOrToken === "object" ? (codeOrToken.lang ?? "") : (lang ?? "");
   try {
@@ -26,16 +31,13 @@ renderer.code = function (codeOrToken: string | { text: string; lang?: string },
 
 marked.use({ gfm: true, breaks: true, renderer });
 
-/** Strip the LLM-generated trailing Sources section (rendered by SourceCards instead). */
 function stripSourcesSection(text: string): string {
   return text.replace(/\n---\s*\n#{1,3}\s*Sources[\s\S]*$/i, "").trimEnd();
 }
 
-/** Render markdown during streaming (no citation processing). */
 export function renderStreaming(text: string): string {
   try {
     let html = marked.parse(stripSourcesSection(text)) as string;
-    // Make all links open in new tab during streaming too
     html = html.replace(
       /<a\s+href="/g,
       '<a target="_blank" rel="noopener noreferrer" href="',
@@ -46,44 +48,46 @@ export function renderStreaming(text: string): string {
   }
 }
 
-/** Render final markdown with citation badges. */
 export function renderFinal(text: string): string {
   try {
     let html = marked.parse(stripSourcesSection(text)) as string;
 
-    // [[N]](URL) → marked produces <a href="URL">[N]</a> → convert to cite-badge
     html = html.replace(
-      /<a\s+href="([^"]*)">\[(\d+)\]<\/a>/g,
-      (_match, _url: string, num: string) => {
-        const idx = parseInt(num) - 1;
-        return `<button class="cite-badge" data-idx="${idx}">${num}</button>`;
+      /<a\s+href="([^"]*)">\[([^\]]+)\]<\/a>/g,
+      (_match, url: string, label: string) => {
+        const numeric = /^\d+$/.test(label);
+        const idxAttr = numeric ? ` data-idx="${parseInt(label, 10) - 1}"` : "";
+        return (
+          `<button class="cite-badge" data-url="${escapeAttr(url)}" ` +
+          `data-label="${escapeAttr(label)}"${idxAttr}>${label}</button>`
+        );
       },
     );
 
-    // Also catch [N](URL) → marked produces <a href="URL">N</a> (number-only text)
     html = html.replace(
       /<a\s+href="([^"]*)">(\d+)<\/a>/g,
-      (_match, _url: string, num: string) => {
-        const idx = parseInt(num) - 1;
-        return `<button class="cite-badge" data-idx="${idx}">${num}</button>`;
+      (_match, url: string, num: string) => {
+        const idx = parseInt(num, 10) - 1;
+        return (
+          `<button class="cite-badge" data-idx="${idx}" data-url="${escapeAttr(url)}" ` +
+          `data-label="${escapeAttr(num)}">${num}</button>`
+        );
       },
     );
 
-    // Make all remaining <a> tags open in new tab
     html = html.replace(
       /<a\s+href="/g,
       '<a target="_blank" rel="noopener noreferrer" href="',
     );
 
     return DOMPurify.sanitize(html, {
-      ADD_ATTR: ["data-idx", "target", "rel"],
+      ADD_ATTR: ["data-idx", "data-url", "data-label", "target", "rel"],
     });
   } catch {
     return escapeHtml(text);
   }
 }
 
-/** Escape user text for display (no markdown). */
 export function escapeUserHtml(text: string): string {
   return escapeHtml(text).replace(/\n/g, "<br>");
 }

@@ -41,6 +41,8 @@ class EntityGrounding(BaseModel):
     key_attributes: list[str] = Field(default_factory=list)
     source_urls: list[str] = Field(default_factory=list)
     primary_source_content: str = ""
+    needs_disambiguation: bool = False
+    clarification_prompt: str = ""
 
 
 class ResearchPlan(BaseModel):

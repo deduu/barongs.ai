@@ -101,6 +101,21 @@ class TestOrchestratorTimeout:
         with pytest.raises(asyncio.TimeoutError):
             await orch.run(agent_context)
 
+    async def test_run_timeout_override(self, agent_context):
+        class SlowAgent(Agent):
+            @property
+            def name(self):
+                return "slow"
+
+            async def run(self, context):
+                await asyncio.sleep(0.05)
+                return AgentResult(agent_name="slow", response="done")
+
+        strategy = SingleAgentStrategy()
+        orch = Orchestrator(strategy=strategy, agents=[SlowAgent()], timeout_seconds=10.0)
+        with pytest.raises(asyncio.TimeoutError):
+            await orch.run(agent_context, timeout_seconds=0.01)
+
 
 class TestOrchestratorStrategySwap:
     async def test_swap_strategy(self, stub_agent, agent_context):

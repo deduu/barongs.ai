@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -8,7 +9,9 @@ from src.applications.deep_search.entity_grounding import (
     build_entity_grounding,
     extract_urls,
     fetch_primary_sources,
+    grounding_requires_disambiguation,
 )
+from src.applications.deep_search.query_utils import build_query_variants, normalize_research_query
 from src.applications.deep_search.models.outline import OutlineSection, ResearchTask
 from src.applications.deep_search.models.streaming import DeepSearchEventType
 from src.applications.deep_search.session_store import SessionStore
@@ -72,6 +75,10 @@ class StreamableDeepSearchPipeline:
         session_store: SessionStore | None = None,
         outline_timeout: float = 600.0,
         timeout_seconds: float = 300.0,
+        research_max_llm_tokens: int = 100_000,
+        research_max_api_calls: int = 50,
+        research_max_time_seconds: float = 300.0,
+        timeout_grace_seconds: float = 10.0,
     ) -> None:
         self._planner_orchestrator = Orchestrator(
             strategy=SingleAgentStrategy(),
@@ -91,6 +98,11 @@ class StreamableDeepSearchPipeline:
         self._model = model
         self._session_store = session_store
         self._outline_timeout = outline_timeout
+        self._default_timeout_seconds = timeout_seconds
+        self._research_max_llm_tokens = research_max_llm_tokens
+        self._research_max_api_calls = research_max_api_calls
+        self._research_max_time_seconds = research_max_time_seconds
+        self._timeout_grace_seconds = timeout_grace_seconds
 
     async def stream_run(self, context: AgentContext) -> AsyncIterator[dict[str, Any]]:
         try:
@@ -152,11 +164,96 @@ class StreamableDeepSearchPipeline:
                 }
             )
 
+            session_id = context.session_id or ""
+            if (
+                grounding_requires_disambiguation(entity_grounding_data)
+                and self._session_store
+                and session_id
+            ):
+                clarification_prompt = str(
+                    entity_grounding_data.get(
+                        "clarification_prompt",
+                        "Clarify which specific entity you mean before research continues.",
+                    )
+                )
+                session = self._session_store.create(session_id)
+                yield self._event(
+                    DeepSearchEventType.DISAMBIGUATION_REQUIRED,
+                    {
+                        "session_id": session_id,
+                        "entity_name": entity_grounding_data.get("name", ""),
+                        "message": clarification_prompt,
+                    },
+                )
+
+                user_response = await session.wait_for_confirmation(
+                    timeout=self._outline_timeout,
+                )
+                self._session_store.remove(session_id)
+
+                if user_response is None:
+                    yield self._event(
+                        DeepSearchEventType.ERROR,
+                        {"error": "Disambiguation confirmation timed out"},
+                    )
+                    return
+
+                clarification = str(user_response.get("clarification", "")).strip()
+                if not clarification:
+                    yield self._event(
+                        DeepSearchEventType.ERROR,
+                        {"error": "A clarification is required before research can continue."},
+                    )
+                    return
+
+                clarified_query = (
+                    f"{context.user_message}\nClarification: {clarification}"
+                )
+                if self._llm:
+                    grounding = await build_entity_grounding(
+                        clarified_query,
+                        [],
+                        self._llm,
+                        self._model,
+                    )
+                    entity_grounding_data = grounding.model_dump()
+
+                enriched_context = context.model_copy(
+                    update={
+                        "user_message": clarified_query,
+                        "metadata": {
+                            **context.metadata,
+                            "entity_grounding": entity_grounding_data,
+                            "user_provided_urls": user_urls,
+                            "disambiguation_clarification": clarification,
+                        },
+                    }
+                )
+                yield self._event(
+                    DeepSearchEventType.DISAMBIGUATION_CONFIRMED,
+                    {
+                        "session_id": session_id,
+                        "message": "Clarification received, continuing research.",
+                    },
+                )
+
             # Phase 1: Planning
             yield self._event(DeepSearchEventType.PLANNING, {"status": "creating research plan"})
 
-            plan_result = await self._planner_orchestrator.run(enriched_context)
+            plan_timeout = self._request_max_time_seconds(context.metadata)
+            plan_result = await self._planner_orchestrator.run(
+                enriched_context,
+                timeout_seconds=plan_timeout,
+            )
             plan = plan_result.metadata.get("research_plan", {})
+            plan = self._ensure_academic_coverage(
+                plan,
+                original_query=context.user_message,
+                enabled=bool(context.metadata.get("enable_academic_search", True)),
+            )
+            requested_max_iterations = context.metadata.get("max_iterations")
+            if isinstance(requested_max_iterations, int) and requested_max_iterations > 0:
+                plan["max_iterations"] = requested_max_iterations
 
             yield self._event(
                 DeepSearchEventType.PLANNING,
@@ -168,7 +265,6 @@ class StreamableDeepSearchPipeline:
 
             # Interactive outline: pause for user editing if requested
             interactive = context.metadata.get("interactive_outline", False)
-            session_id = context.session_id or ""
             if interactive and self._session_store and session_id:
                 research_mode = context.metadata.get("research_mode", "general")
                 sections = _DEFAULT_SECTIONS.get(research_mode, _DEFAULT_SECTIONS["general"])
@@ -233,18 +329,88 @@ class StreamableDeepSearchPipeline:
 
             # Phase 2: Research via DAG
             misattributed_ids: list[str] = []
+            attempted_sources: list[dict[str, Any]] = []
             if plan.get("tasks"):
                 yield self._event(DeepSearchEventType.RESEARCHING, {"status": "starting research"})
+                logger.info("Deep search research phase started with %s tasks", len(plan.get("tasks", [])))
+
+                progress_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+                async def _task_progress_callback(payload: dict[str, Any]) -> None:
+                    await progress_queue.put(
+                        self._event(
+                            DeepSearchEventType.RESEARCHING,
+                            {
+                                "status": (
+                                    f"{payload.get('status', 'update')}: "
+                                    f"{payload.get('agent_name', payload.get('task_id', 'task'))}"
+                                ),
+                                **payload,
+                            },
+                        )
+                    )
+
+                async def _budget_progress_callback(payload: dict[str, Any]) -> None:
+                    await progress_queue.put(
+                        self._event(DeepSearchEventType.BUDGET_UPDATE, payload)
+                    )
 
                 research_context = enriched_context.model_copy(
                     update={
-                        "metadata": {**enriched_context.metadata, "research_plan": plan},
+                        "metadata": {
+                            **enriched_context.metadata,
+                            "research_plan": plan,
+                            "research_budget": self._build_research_budget(
+                                enriched_context.metadata,
+                            ),
+                            "_task_progress_callback": _task_progress_callback,
+                            "_budget_progress_callback": _budget_progress_callback,
+                        },
                     }
                 )
+                dag_budget = research_context.metadata.get("research_budget", {})
+                dag_max_time = float(
+                    dag_budget.get(
+                        "max_time_seconds",
+                        self._request_max_time_seconds(enriched_context.metadata),
+                    )
+                )
+                dag_timeout = dag_max_time + self._timeout_grace_seconds
 
-                dag_result = await self._dag_orchestrator.run(research_context)
+                # Run the DAG as a background task and emit heartbeat events
+                # while waiting so the frontend doesn't appear hung.
+                dag_task = asyncio.create_task(
+                    self._dag_orchestrator.run(
+                        research_context,
+                        timeout_seconds=dag_timeout,
+                    )
+                )
+                elapsed = 0
+                while True:
+                    done, _ = await asyncio.wait({dag_task}, timeout=5.0)
+                    while not progress_queue.empty():
+                        queued_event = await progress_queue.get()
+                        yield queued_event
+                    if done:
+                        break
+                    elapsed += 5
+                    remaining = max(0.0, dag_max_time - elapsed)
+                    yield self._event(
+                        DeepSearchEventType.RESEARCHING,
+                        {
+                            "status": f"researching ({elapsed}s elapsed)",
+                            "remaining_time_seconds": round(remaining, 1),
+                            "active_task_count": len(plan.get("tasks", [])),
+                        },
+                    )
+
+                dag_result = await dag_task
+                while not progress_queue.empty():
+                    queued_event = await progress_queue.get()
+                    yield queued_event
                 findings: list[dict[str, Any]] = dag_result.metadata.get("findings", [])
                 misattributed_ids = dag_result.metadata.get("misattributed_ids", [])
+                attempted_sources = dag_result.metadata.get("attempted_sources", [])
 
                 for finding in findings:
                     yield self._event(DeepSearchEventType.FINDING, {"finding": finding})
@@ -256,8 +422,15 @@ class StreamableDeepSearchPipeline:
                         "finding_count": len(findings),
                     },
                 )
+
+                # Reflection phase: surface before synthesis
+                yield self._event(
+                    DeepSearchEventType.REFLECTING,
+                    {"status": "reviewing and filtering findings"},
+                )
             else:
                 findings = []
+                attempted_sources = []
 
             # Filter misattributed findings before synthesis
             misattributed_set = set(misattributed_ids)
@@ -283,6 +456,7 @@ class StreamableDeepSearchPipeline:
                         **enriched_context.metadata,
                         "findings": relevant_findings,
                         "misattributed_ids": misattributed_ids,
+                        "attempted_sources": attempted_sources,
                     },
                 }
             )
@@ -301,10 +475,95 @@ class StreamableDeepSearchPipeline:
                 },
             )
 
+        except asyncio.TimeoutError:
+            logger.error("Deep search pipeline timeout", exc_info=True)
+            yield self._event(
+                DeepSearchEventType.ERROR,
+                {
+                    "error": (
+                        "Deep search timed out before completion. "
+                        "Increase max_time_seconds or narrow the query scope."
+                    ),
+                },
+            )
         except Exception as exc:
-            logger.error("Deep search pipeline error: %s", exc)
+            logger.error("Deep search pipeline error: %s", exc, exc_info=True)
             yield self._event(DeepSearchEventType.ERROR, {"error": str(exc)})
 
     @staticmethod
     def _event(event_type: DeepSearchEventType, data: dict[str, Any]) -> dict[str, Any]:
         return {"event": event_type, "data": data}
+
+    @staticmethod
+    def _has_academic_task(tasks: list[dict[str, Any]]) -> bool:
+        for task in tasks:
+            if task.get("task_type") == "secondary_academic":
+                return True
+            if task.get("agent_name") == "academic_researcher":
+                return True
+        return False
+
+    @staticmethod
+    def _next_task_id(tasks: list[dict[str, Any]]) -> str:
+        taken = {str(task.get("task_id", "")) for task in tasks}
+        index = 1
+        while f"t{index}" in taken:
+            index += 1
+        return f"t{index}"
+
+    def _ensure_academic_coverage(
+        self,
+        plan: dict[str, Any],
+        *,
+        original_query: str,
+        enabled: bool,
+    ) -> dict[str, Any]:
+        if not enabled:
+            return plan
+        if not any(agent.name == "academic_researcher" for agent in self._agents):
+            return plan
+        tasks = plan.get("tasks", [])
+        if not isinstance(tasks, list):
+            return plan
+        if self._has_academic_task(tasks):
+            return plan
+
+        normalized_query = normalize_research_query(original_query)
+        query_variants = build_query_variants(original_query)
+        academic_query = query_variants[0] if query_variants else normalized_query
+
+        augmented_tasks = list(tasks)
+        augmented_tasks.append(
+            {
+                "task_id": self._next_task_id(augmented_tasks),
+                "query": academic_query,
+                "task_type": "secondary_academic",
+                "depends_on": [],
+                "agent_name": "academic_researcher",
+            }
+        )
+        updated_plan = dict(plan)
+        updated_plan["tasks"] = augmented_tasks
+        return updated_plan
+
+    def _request_max_time_seconds(self, metadata: dict[str, Any]) -> float:
+        requested = metadata.get("max_time_seconds")
+        if isinstance(requested, (int, float)) and requested > 0:
+            return float(requested)
+        return self._default_timeout_seconds
+
+    def _build_research_budget(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        requested_max_time = metadata.get("max_time_seconds")
+        max_time_seconds = (
+            float(requested_max_time)
+            if isinstance(requested_max_time, (int, float)) and requested_max_time > 0
+            else self._research_max_time_seconds
+        )
+        return {
+            "max_llm_tokens": self._research_max_llm_tokens,
+            "max_api_calls": self._research_max_api_calls,
+            "max_time_seconds": max_time_seconds,
+            "used_llm_tokens": 0,
+            "used_api_calls": 0,
+            "used_time_seconds": 0.0,
+        }

@@ -153,3 +153,67 @@ class TestAcademicSearchToolFailure:
 
         assert result.success is True
         assert mock_pool.get.call_count == 2
+
+    async def test_google_scholar_web_source(self):
+        tool = AcademicSearchTool(http_client=AsyncMock(), max_results=3)
+        tool._search_google_scholar_web = AsyncMock(return_value=[
+            {
+                "title": "OpenClaw Safety Analysis",
+                "url": "https://scholar.google.com/some-result",
+                "abstract": "Safety and risk analysis snippet.",
+                "authors": [],
+                "year": None,
+                "citation_count": 0,
+                "source": "google_scholar_web",
+            }
+        ])
+
+        tool_input = ToolInput(
+            tool_name="academic_search",
+            parameters={"query": "OpenClaw safety", "sources": ["google_scholar_web"]},
+        )
+        result = await tool.execute(tool_input)
+
+        assert result.success is True
+        assert len(result.output) == 1
+        assert result.output[0]["source"] == "google_scholar_web"
+
+    async def test_uses_query_variants_until_results_found(self):
+        mock_pool = AsyncMock()
+        first_response = MagicMock()
+        first_response.status_code = 200
+        first_response.raise_for_status = MagicMock()
+        first_response.json.return_value = {"data": []}
+
+        second_response = MagicMock()
+        second_response.status_code = 200
+        second_response.raise_for_status = MagicMock()
+        second_response.json.return_value = {
+            "data": [
+                {
+                    "title": "OpenClaw Safety",
+                    "url": "https://api.semanticscholar.org/paper2",
+                    "abstract": "Safety analysis",
+                    "authors": [{"name": "A. Researcher"}],
+                    "year": 2024,
+                    "citationCount": 5,
+                }
+            ]
+        }
+        mock_pool.get = AsyncMock(side_effect=[first_response, second_response])
+
+        tool = AcademicSearchTool(http_client=mock_pool, max_results=5)
+        tool_input = ToolInput(
+            tool_name="academic_search",
+            parameters={
+                "query": "OpenClaw safety and risk concern",
+                "query_variants": ["\"OpenClaw\" safety"],
+                "sources": ["semantic_scholar"],
+            },
+        )
+        result = await tool.execute(tool_input)
+
+        assert result.success is True
+        assert len(result.output) == 1
+        assert mock_pool.get.call_args_list[0].kwargs["params"]["query"] == "OpenClaw safety and risk concern"
+        assert mock_pool.get.call_args_list[1].kwargs["params"]["query"] == "\"OpenClaw\" safety"

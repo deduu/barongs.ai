@@ -4,6 +4,13 @@ import logging
 import uuid
 from typing import Any
 
+from src.applications.deep_search.query_utils import (
+    build_query_variants,
+    normalize_research_query,
+    source_mentions_entity,
+    source_mentions_query_focus,
+    source_supports_entity_description,
+)
 from src.core.interfaces.agent import Agent
 from src.core.interfaces.tool import Tool
 from src.core.llm.base import LLMProvider
@@ -41,13 +48,30 @@ class AcademicResearcherAgent(Agent):
 
     async def run(self, context: AgentContext) -> AgentResult:
         query = context.user_message
+        max_sources_raw = context.metadata.get("max_sources", 10)
+        max_sources = max_sources_raw if isinstance(max_sources_raw, int) else 10
+        max_sources = max(1, min(max_sources, 10))
         entity_grounding = context.metadata.get("entity_grounding", {})
         entity_name = entity_grounding.get("name", "")
         entity_desc = entity_grounding.get("description", "")
+        search_query = normalize_research_query(query)
+        query_variants = build_query_variants(query, entity_name)
+        logger.info(
+            "Academic researcher started: query=%s max_sources=%s",
+            query[:160],
+            max_sources,
+        )
 
         # Step 1: Search academic sources
         search_result = await self._academic_tool.execute(
-            ToolInput(tool_name=self._academic_tool.name, parameters={"query": query})
+            ToolInput(
+                tool_name=self._academic_tool.name,
+                parameters={
+                    "query": search_query,
+                    "query_variants": query_variants,
+                    "sources": ["semantic_scholar", "arxiv", "google_scholar_web"],
+                },
+            )
         )
 
         if not search_result.success or not search_result.output:
@@ -59,8 +83,18 @@ class AcademicResearcherAgent(Agent):
 
         papers: list[dict[str, Any]] = search_result.output
         findings: list[dict[str, Any]] = []
+        attempted_sources: list[dict[str, Any]] = []
 
-        for paper in papers[:10]:
+        for paper in papers[:max_sources]:
+            source_record: dict[str, Any] = {
+                "url": paper.get("url", ""),
+                "title": paper.get("title", ""),
+                "status": "queued",
+                "source_type": "academic",
+            }
+            attempted_sources.append(source_record)
+            logger.info("Academic researcher paper queued: url=%s", paper.get("url", ""))
+
             # Score the source
             score_result = await self._scorer_tool.execute(
                 ToolInput(
@@ -83,7 +117,7 @@ class AcademicResearcherAgent(Agent):
                     f"\n\nIMPORTANT: The target entity is: {entity_name}"
                     f"\nDescription: {entity_desc}"
                     f"\nONLY extract findings that are specifically about this entity. "
-                    f"If the paper is about a DIFFERENT entity with a similar name, "
+                    f"If the paper is CLEARLY about a different entity with a similar name, "
                     f"respond with exactly: {_NOT_RELEVANT_SENTINEL}"
                 )
 
@@ -103,6 +137,8 @@ class AcademicResearcherAgent(Agent):
                         "You are a research assistant. Extract a comprehensive, detailed summary "
                         "of the key findings. Include methodology, results, specific data points, "
                         "and conclusions. Be thorough. "
+                        "Only respond with NOT_RELEVANT when the source is clearly about a different "
+                        "entity than the target. "
                         "If the content is not about the target entity, respond with: "
                         f"{_NOT_RELEVANT_SENTINEL}"
                     ),
@@ -112,8 +148,57 @@ class AcademicResearcherAgent(Agent):
                 response = await self._llm.generate(request)
 
                 if _NOT_RELEVANT_SENTINEL in response.content.upper():
-                    logger.debug("Filtered irrelevant academic finding: %s", paper.get("title"))
-                    continue
+                    likely_relevant = source_mentions_entity(
+                        entity_name,
+                        paper.get("title", ""),
+                        paper.get("abstract", ""),
+                    )
+                    supported_by_focus = source_mentions_query_focus(
+                        query,
+                        entity_name,
+                        paper.get("title", ""),
+                        paper.get("abstract", ""),
+                    ) or source_supports_entity_description(
+                        entity_desc,
+                        paper.get("title", ""),
+                        paper.get("abstract", ""),
+                    )
+                    if not likely_relevant or not supported_by_focus:
+                        logger.debug("Filtered irrelevant academic finding: %s", paper.get("title"))
+                        source_record["status"] = "filtered_irrelevant"
+                        continue
+
+                    retry_request = LLMRequest(
+                        messages=[
+                            LLMMessage(
+                                role="user",
+                                content=(
+                                    f"The source explicitly mentions {entity_name}. "
+                                    f"Extract only source-supported details relevant to: {query}\n\n"
+                                    f"Title: {paper.get('title', '')}\n"
+                                    f"Abstract: {paper.get('abstract', '')[:3000]}"
+                                ),
+                            )
+                        ],
+                        model=self._model,
+                        system_prompt=(
+                            "Extract only information supported by the title and abstract. "
+                            "Use concise, cautious language. "
+                            "Return NOT_RELEVANT only if the source clearly names a different entity."
+                        ),
+                        temperature=0.1,
+                        max_tokens=500,
+                    )
+                    retry_response = await self._llm.generate(retry_request)
+                    if _NOT_RELEVANT_SENTINEL in retry_response.content.upper():
+                        logger.debug(
+                            "Filtered irrelevant academic finding after retry: %s",
+                            paper.get("title"),
+                        )
+                        source_record["status"] = "filtered_irrelevant"
+                        continue
+                    response = retry_response
+                    source_record["status"] = "finding_extracted_retry"
 
                 findings.append(
                     {
@@ -127,11 +212,21 @@ class AcademicResearcherAgent(Agent):
                         "entity_match": True,
                     }
                 )
+                if source_record["status"] == "queued":
+                    source_record["status"] = "finding_extracted"
+                logger.info("Academic researcher finding extracted: url=%s", paper.get("url", ""))
             except Exception:
                 logger.debug("Failed to extract finding from paper: %s", paper.get("title"))
+                source_record["status"] = "extraction_error"
+                logger.info("Academic researcher extraction error: url=%s", paper.get("url", ""))
 
+        logger.info(
+            "Academic researcher finished: findings=%s attempted=%s",
+            len(findings),
+            len(attempted_sources),
+        )
         return AgentResult(
             agent_name=self.name,
-            response=f"Found {len(findings)} academic findings.",
-            metadata={"findings": findings},
+            response=f"Found {len(findings)} academic findings from {len(attempted_sources)} papers.",
+            metadata={"findings": findings, "attempted_sources": attempted_sources},
         )

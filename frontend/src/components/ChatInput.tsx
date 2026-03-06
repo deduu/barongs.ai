@@ -85,10 +85,15 @@ export default function ChatInput({
                 style={{ color: "var(--text-muted)" }}
                 title="Attach file"
                 aria-label="Attach file"
+                disabled={disabled}
               >
                 <PlusIcon size={18} />
               </button>
-              <RAGModeToggle mode={chatMode} onChange={onChatModeChange} />
+              <RAGModeToggle
+                mode={chatMode}
+                onChange={onChatModeChange}
+                disabled={disabled}
+              />
               {charCount > 100 && (
                 <span
                   className="text-[10px] tabular-nums"

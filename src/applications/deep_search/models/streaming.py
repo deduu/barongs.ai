@@ -5,6 +5,8 @@ from enum import StrEnum
 
 class DeepSearchEventType(StrEnum):
     STATUS = "status"
+    DISAMBIGUATION_REQUIRED = "disambiguation_required"
+    DISAMBIGUATION_CONFIRMED = "disambiguation_confirmed"
     PLANNING = "planning"
     RESEARCHING = "researching"
     FINDING = "finding"

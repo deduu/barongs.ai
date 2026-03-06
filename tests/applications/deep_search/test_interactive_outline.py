@@ -153,6 +153,66 @@ class TestPipelineSession:
 
 
 class TestStreamingPipelineInteractive:
+    async def test_ambiguous_entity_requires_disambiguation(self) -> None:
+        """Ambiguous entity grounding should pause for clarification before planning."""
+        from src.applications.deep_search.models.streaming import DeepSearchEventType
+        from src.applications.deep_search.streaming_pipeline import StreamableDeepSearchPipeline
+        from src.core.llm.models import LLMResponse
+
+        llm = AsyncMock()
+        llm.generate = AsyncMock(side_effect=[
+            LLMResponse(
+                content='{"name":"OpenClaw","description":"A robotic gripper","key_attributes":["robotics"]}',
+                model="test",
+            ),
+            LLMResponse(
+                content='{"name":"OpenClaw","description":"An AI agent platform","key_attributes":["ai","agent"]}',
+                model="test",
+            ),
+        ])
+
+        mock_planner = MagicMock()
+        mock_planner.run = AsyncMock(
+            return_value=MagicMock(
+                metadata={"research_plan": {"tasks": [], "original_query": "OpenClaw safety"}},
+            )
+        )
+        mock_synthesizer = MagicMock()
+
+        async def _stream(*_a: Any, **_kw: Any) -> Any:
+            yield "token"
+
+        mock_synthesizer.stream_run = _stream
+
+        store = SessionStore()
+        pipeline = StreamableDeepSearchPipeline(
+            planner=mock_planner,
+            synthesizer=mock_synthesizer,
+            strategy=MagicMock(),
+            agents=[],
+            llm_provider=llm,
+            session_store=store,
+        )
+
+        context = AgentContext(
+            user_message="OpenClaw safety",
+            session_id="test-session",
+            metadata={},
+        )
+
+        events: list[dict[str, Any]] = []
+        async for event in pipeline.stream_run(context):
+            events.append(event)
+            if event["event"] == DeepSearchEventType.DISAMBIGUATION_REQUIRED:
+                session = store.get("test-session")
+                assert session is not None
+                session.confirm({"clarification": "I mean OpenClaw the AI agent"})
+
+        event_types = [e["event"] for e in events]
+        assert DeepSearchEventType.DISAMBIGUATION_REQUIRED in event_types
+        assert DeepSearchEventType.DISAMBIGUATION_CONFIRMED in event_types
+        mock_planner.run.assert_awaited_once()
+
     async def test_non_interactive_does_not_pause(self) -> None:
         """With interactive_outline=False, pipeline should not emit OUTLINE_READY."""
         from src.applications.deep_search.models.streaming import DeepSearchEventType

@@ -295,3 +295,19 @@ class TestDeepSearchRequestValidation:
 
         with pytest.raises(ValidationError):
             DeepSearchRequest(query="test", crawl_depth=5)
+
+    def test_max_time_out_of_range_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from src.applications.deep_search.models.api import DeepSearchRequest
+
+        with pytest.raises(ValidationError):
+            DeepSearchRequest(query="test", max_time_seconds=10)
+
+    def test_max_iterations_out_of_range_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from src.applications.deep_search.models.api import DeepSearchRequest
+
+        with pytest.raises(ValidationError):
+            DeepSearchRequest(query="test", max_iterations=0)

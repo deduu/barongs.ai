@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import type { ChatMode, Source } from "./types";
 import { getString, setItem } from "./lib/storage";
@@ -20,14 +20,22 @@ import WelcomeScreen from "./components/WelcomeScreen";
 import KnowledgeBase from "./components/KnowledgeBase";
 import LoginPage from "./components/LoginPage";
 import PageTransition from "./components/PageTransition";
+import OutlineEditor from "./components/OutlineEditor";
+import DisambiguationDialog from "./components/DisambiguationDialog";
 import {
   MenuIcon,
   MoonIcon,
   SunIcon,
   MonitorIcon,
   SettingsIcon,
-  BellIcon,
 } from "./components/icons";
+
+function formatDuration(totalSeconds: number): string {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  if (mins <= 0) return `${secs}s`;
+  return `${mins}m ${secs}s`;
+}
 
 export default function App() {
   /* ── Theme ─────────────────────────────────────────────────── */
@@ -95,7 +103,20 @@ export default function App() {
   const { settings: searchSettings, updateModeSettings, applyPreset, resetMode, getActivePreset } = useSearchSettings();
 
   /* ── Streaming ─────────────────────────────────────────────── */
-  const { isStreaming, statusMessage, send } = useStreamSearch({
+  const {
+    isStreaming,
+    statusMessage,
+    streamStartedAt,
+    lastEventAt,
+    eventCount,
+    outlineData,
+    disambiguationData,
+    send,
+    abort,
+    submitOutline,
+    submitDisambiguation,
+    regenerate,
+  } = useStreamSearch({
     apiKey: bearerToken,
     currentConvId,
     chatMode,
@@ -103,6 +124,23 @@ export default function App() {
     setMessages,
     onComplete: saveCurrentConversation,
   });
+  const [streamNow, setStreamNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isStreaming) return;
+    setStreamNow(Date.now());
+    const id = window.setInterval(() => setStreamNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [isStreaming]);
+
+  const streamElapsedSeconds = streamStartedAt
+    ? Math.max(0, Math.floor((streamNow - streamStartedAt) / 1000))
+    : 0;
+  const streamLastUpdateSeconds = lastEventAt
+    ? Math.max(0, Math.floor((streamNow - lastEventAt) / 1000))
+    : 0;
+  const streamIsStale = isStreaming && streamLastUpdateSeconds >= 12;
+  const conversationLockReason = "Finish or stop the current run before starting or switching chats.";
 
   /* ── RAG document management ────────────────────────────────── */
   const rag = useRAG({ apiKey: bearerToken });
@@ -142,6 +180,21 @@ export default function App() {
   /* ── Settings modal ──────────────────────────────────────── */
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  /* ── Avatar dropdown ────────────────────────────────────── */
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const avatarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!avatarMenuOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setAvatarMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [avatarMenuOpen]);
+
   const handleSaveApiKey = useCallback(
     (key: string) => {
       saveApiKey(key);
@@ -153,6 +206,7 @@ export default function App() {
   /* ── Keyboard shortcuts ──────────────────────────────────── */
   useKeyboardShortcuts({
     onNewChat: () => {
+      if (isStreaming) return;
       newChat(activeProjectId);
       setActivePage("chat");
       if (isMobile) setSidebarOpen(false);
@@ -213,12 +267,16 @@ export default function App() {
         activePage={activePage}
         projects={projects}
         activeProjectId={activeProjectId}
+        isConversationLocked={isStreaming}
+        conversationLockReason={conversationLockReason}
         onNewChat={() => {
+          if (isStreaming) return;
           newChat(activeProjectId);
           setActivePage("chat");
           if (isMobile) setSidebarOpen(false);
         }}
         onLoadConversation={(id) => {
+          if (isStreaming) return;
           loadConversation(id);
           setActivePage("chat");
           if (isMobile) setSidebarOpen(false);
@@ -286,20 +344,42 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button
-              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
-              style={{ color: "var(--text-secondary)" }}
-              title="Notifications"
-              aria-label="Notifications"
-            >
-              <BellIcon size={16} />
-            </button>
-            <span
-              className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-              style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
-            >
-              300
-            </span>
+            {isStreaming && (
+              <>
+                <div
+                  className="mr-1 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                  style={{
+                    borderColor: streamIsStale ? "rgba(245, 158, 11, 0.55)" : "var(--border)",
+                    background: "var(--surface-2)",
+                    color: "var(--text-secondary)",
+                  }}
+                  aria-live="polite"
+                  aria-label={`Agent running. Elapsed ${formatDuration(streamElapsedSeconds)}. Last update ${formatDuration(streamLastUpdateSeconds)} ago.`}
+                >
+                  <span
+                    className="h-2 w-2 rounded-full animate-pulse"
+                    style={{ background: streamIsStale ? "#f59e0b" : "#22c55e" }}
+                  />
+                  <span className="hidden sm:inline">
+                    {streamIsStale ? "No recent update" : "Agent running"}
+                  </span>
+                  <span>{formatDuration(streamElapsedSeconds)}</span>
+                </div>
+                <button
+                  className="mr-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors hover:bg-[var(--surface-2)]"
+                  style={{
+                    borderColor: "var(--border)",
+                    background: "var(--surface)",
+                    color: "var(--text-secondary)",
+                  }}
+                  onClick={abort}
+                  title="Stop the current run"
+                  aria-label="Stop the current run"
+                >
+                  Stop
+                </button>
+              </>
+            )}
             <button
               className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-2)]"
               style={{ color: "var(--text-secondary)" }}
@@ -324,11 +404,49 @@ export default function App() {
             >
               <SettingsIcon size={16} />
             </button>
-            <div
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold"
-              style={{ background: "var(--surface-3)", color: "var(--text-secondary)" }}
-            >
-              {auth.user?.email?.[0]?.toUpperCase() ?? "U"}
+            <div ref={avatarRef} className="relative">
+              <button
+                className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold transition-opacity hover:opacity-80"
+                style={{ background: "var(--surface-3)", color: "var(--text-secondary)" }}
+                onClick={() => setAvatarMenuOpen((v) => !v)}
+                title="Account"
+                aria-label="Account menu"
+                aria-expanded={avatarMenuOpen}
+              >
+                {auth.user?.email?.[0]?.toUpperCase() ?? "U"}
+              </button>
+              {avatarMenuOpen && (
+                <div
+                  className="absolute right-0 top-9 z-50 min-w-[180px] rounded-xl py-1 shadow-lg"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+                >
+                  {auth.user?.email && (
+                    <div
+                      className="truncate px-3 py-2 text-[11px]"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {auth.user.email}
+                    </div>
+                  )}
+                  <button
+                    className="flex w-full items-center gap-2 px-3 py-2 text-[13px] transition-colors hover:bg-[var(--surface-3)]"
+                    style={{ color: "var(--text)" }}
+                    onClick={() => { setSettingsOpen(true); setAvatarMenuOpen(false); }}
+                  >
+                    <SettingsIcon size={13} />
+                    Settings
+                  </button>
+                  {auth.mode === "jwt" && (
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-[13px] transition-colors hover:bg-[var(--surface-3)]"
+                      style={{ color: "#ef4444" }}
+                      onClick={() => { auth.logout(); setAvatarMenuOpen(false); }}
+                    >
+                      Logout
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -358,9 +476,13 @@ export default function App() {
                 messages={messages}
                 isStreaming={isStreaming}
                 statusMessage={statusMessage}
+                streamStartedAt={streamStartedAt}
+                lastEventAt={lastEventAt}
+                eventCount={eventCount}
                 selectedModel={selectedModel}
                 chatMode={chatMode}
                 onSourceClick={openSource}
+                onRegenerate={regenerate}
               />
               <ChatInput
                 disabled={isStreaming}
@@ -378,6 +500,24 @@ export default function App() {
         source={selectedSource}
         onClose={closeSourcePanel}
       />
+
+      {disambiguationData && (
+        <DisambiguationDialog
+          data={disambiguationData}
+          onConfirm={submitDisambiguation}
+        />
+      )}
+
+      {outlineData && (
+        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/50 p-4">
+          <div
+            className="flex max-h-[calc(100vh-32px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border p-5 shadow-xl"
+            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+          >
+            <OutlineEditor outline={outlineData} onConfirm={submitOutline} />
+          </div>
+        </div>
+      )}
 
       <SettingsModal
         open={settingsOpen}

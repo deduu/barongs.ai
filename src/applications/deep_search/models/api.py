@@ -9,8 +9,8 @@ class DeepSearchRequest(BaseModel):
     """API request for deep search."""
 
     query: str
-    max_iterations: int = 3
-    max_time_seconds: int = 300
+    max_iterations: int = Field(default=3, ge=1, le=8)
+    max_time_seconds: int = Field(default=300, ge=30, le=3600)
     enable_code_execution: bool = False
     enable_academic_search: bool = True
     session_id: str | None = None

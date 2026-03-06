@@ -6,6 +6,9 @@ GENERAL_SYNTH_PROMPT = """You are a deep research synthesizer. Create a comprehe
 
 {entity_context}
 
+REFERENCE CATALOG (use these exact URLs for citations):
+{reference_catalog}
+
 Structure your response as:
 # Executive Summary
 Brief overview of key findings about {entity_name}.
@@ -27,15 +30,24 @@ FINDINGS:
 
 IMPORTANT RULES:
 - Every claim must reference a finding.
+- Use clickable inline citations in this exact format: [[finding_id]](URL)
 - ONLY include information that is specifically about {entity_name}.
 - If a finding appears to be about a different entity with a similar name, DISCARD it and note this in the Limitations section.
-- If no relevant findings exist, say so honestly rather than speculating."""
+- If no relevant findings exist, say so honestly rather than speculating.
+- Even when evidence is sparse, still produce the full report structure with substantive methodology, search coverage, evidence gaps, and concrete next steps.
+- Include a final '## References' section listing cited URLs."""
 
 
 ACADEMIC_SYNTH_PROMPT = """You are an academic research synthesizer. Create a research paper from the findings, \
 following the structure of a peer-reviewed journal article.
 
 {entity_context}
+
+REFERENCE CATALOG (use these exact URLs for citations):
+{reference_catalog}
+
+LENGTH GUIDANCE:
+{length_guidance}
 
 Structure your response as:
 
@@ -84,17 +96,23 @@ FINDINGS:
 
 IMPORTANT RULES:
 - Maintain a formal academic tone throughout.
-- Every claim must be supported by a cited finding [source_url].
+- Every claim must be supported by a cited finding.
+- Use clickable inline citations in this exact format: [[finding_id]](URL)
 - ONLY include information that is specifically about {entity_name}.
 - If a finding appears to be about a different entity with a similar name, DISCARD it.
 - If no relevant findings exist, say so honestly rather than speculating.
-- Use hedging language where confidence is low (e.g., "suggests", "appears to indicate")."""
+- If evidence is sparse, do not collapse into a stub paper; keep all required sections and use the available source/search coverage to explain methodology, evidence gaps, and limitations.
+- Use hedging language where confidence is low (e.g., "suggests", "appears to indicate").
+- '## References' MUST be present and include all cited URLs from the report."""
 
 
 CONSULTANT_SYNTH_PROMPT = """You are a management consulting analyst. Create a professional consulting report \
 from the findings, following the format of a top-tier strategy firm deliverable.
 
 {entity_context}
+
+REFERENCE CATALOG (use these exact URLs for citations):
+{reference_catalog}
 
 Structure your response as:
 
@@ -137,11 +155,14 @@ FINDINGS:
 IMPORTANT RULES:
 - Maintain a professional, authoritative tone suitable for C-level executives.
 - Be direct and action-oriented. Lead with insights, not methodology.
-- Every claim must be supported by a cited finding [source_url].
+- Every claim must be supported by a cited finding.
+- Use clickable inline citations in this exact format: [[finding_id]](URL)
 - ONLY include information that is specifically about {entity_name}.
 - If a finding appears to be about a different entity with a similar name, DISCARD it.
 - If no relevant findings exist, say so honestly rather than speculating.
-- Use clear, concise language. Avoid jargon where simpler terms suffice."""
+- Even when evidence is sparse, still produce a complete report with explicit search coverage, evidence gaps, and practical next steps.
+- Use clear, concise language. Avoid jargon where simpler terms suffice.
+- Include a final '## References' section listing cited URLs."""
 
 
 SYNTH_PROMPTS: dict[ResearchMode, str] = {

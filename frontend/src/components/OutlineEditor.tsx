@@ -35,7 +35,7 @@ export default function OutlineEditor({ outline, onConfirm }: OutlineEditorProps
     setTasks((prev) => [
       ...prev,
       {
-        task_id: `t${prev.length}`,
+        task_id: `t${prev.length + 1}`,
         query: "",
         task_type: "secondary_web",
         agent_name: "deep_web_researcher",
@@ -44,72 +44,153 @@ export default function OutlineEditor({ outline, onConfirm }: OutlineEditorProps
     ]);
   };
 
-  return (
-    <div className="outline-editor">
-      <h3>Research Outline</h3>
-      <p className="outline-query">Query: {outline.query}</p>
+  const inputStyle = {
+    background: "var(--surface-2)",
+    borderColor: "var(--border)",
+    color: "var(--text)",
+  } as const;
 
-      <div className="outline-panels">
-        {/* Report Sections */}
-        <div className="outline-panel">
-          <h4>Report Sections</h4>
-          {sections.map((s, i) => (
-            <div key={i} className="outline-item">
-              <input
-                value={s.heading}
-                onChange={(e) => updateSection(i, "heading", e.target.value)}
-                placeholder="Section heading"
-              />
-              <input
-                value={s.description}
-                onChange={(e) => updateSection(i, "description", e.target.value)}
-                placeholder="Description"
-              />
-              <button onClick={() => removeSection(i)} className="outline-remove" title="Remove section">
-                &times;
-              </button>
-            </div>
-          ))}
-          <button onClick={addSection} className="outline-add">
-            + Add Section
-          </button>
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-4 flex-shrink-0">
+        <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
+          Research Outline
+        </h3>
+        <p className="mt-1 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+          Review the plan before deep research starts.
+        </p>
+        <p className="mt-2 text-[12px]" style={{ color: "var(--text-muted)" }}>
+          Query: {outline.query}
+        </p>
+      </div>
+
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+        <div
+          className="flex min-h-0 flex-col rounded-xl border p-4"
+          style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
+        >
+          <div className="mb-3 flex flex-shrink-0 items-center justify-between">
+            <h4 className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+              Report Sections
+            </h4>
+            <button
+              className="rounded-lg px-2 py-1 text-xs"
+              style={{ background: "var(--surface-3)", color: "var(--text-secondary)" }}
+              onClick={addSection}
+            >
+              Add Section
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+            {sections.map((section, idx) => (
+              <div key={`${section.heading}-${idx}`} className="rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
+                <input
+                  className="mb-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                  style={inputStyle}
+                  value={section.heading}
+                  onChange={(e) => updateSection(idx, "heading", e.target.value)}
+                  placeholder="Section heading"
+                />
+                <input
+                  className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                  style={inputStyle}
+                  value={section.description}
+                  onChange={(e) => updateSection(idx, "description", e.target.value)}
+                  placeholder="Description"
+                />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="text-xs"
+                    style={{ color: "#ef4444" }}
+                    onClick={() => removeSection(idx)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Research Tasks */}
-        <div className="outline-panel">
-          <h4>Research Tasks</h4>
-          {tasks.map((t, i) => (
-            <div key={i} className="outline-item">
-              <input
-                value={t.query}
-                onChange={(e) => updateTask(i, "query", e.target.value)}
-                placeholder="Search query"
-              />
-              <select
-                value={t.task_type}
-                onChange={(e) => updateTask(i, "task_type", e.target.value)}
-              >
-                <option value="secondary_web">Web Search</option>
-                <option value="secondary_academic">Academic Search</option>
-                <option value="code_analysis">Code Analysis</option>
-              </select>
-              <button onClick={() => removeTask(i)} className="outline-remove" title="Remove task">
-                &times;
-              </button>
-            </div>
-          ))}
-          <button onClick={addTask} className="outline-add">
-            + Add Task
-          </button>
+        <div
+          className="flex min-h-0 flex-col rounded-xl border p-4"
+          style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
+        >
+          <div className="mb-3 flex flex-shrink-0 items-center justify-between">
+            <h4 className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+              Research Tasks
+            </h4>
+            <button
+              className="rounded-lg px-2 py-1 text-xs"
+              style={{ background: "var(--surface-3)", color: "var(--text-secondary)" }}
+              onClick={addTask}
+            >
+              Add Task
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+            {tasks.map((task, idx) => (
+              <div key={`${task.task_id}-${idx}`} className="rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
+                <input
+                  className="mb-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                  style={inputStyle}
+                  value={task.query}
+                  onChange={(e) => updateTask(idx, "query", e.target.value)}
+                  placeholder="Search query"
+                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <select
+                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    style={inputStyle}
+                    value={task.task_type}
+                    onChange={(e) => updateTask(idx, "task_type", e.target.value)}
+                  >
+                    <option value="secondary_web">Web Search</option>
+                    <option value="secondary_academic">Academic Search</option>
+                    <option value="primary_code">Code Analysis</option>
+                    <option value="fact_check">Fact Check</option>
+                  </select>
+                  <select
+                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    style={inputStyle}
+                    value={task.agent_name}
+                    onChange={(e) => updateTask(idx, "agent_name", e.target.value)}
+                  >
+                    <option value="deep_web_researcher">Web Researcher</option>
+                    <option value="academic_researcher">Academic Researcher</option>
+                    <option value="data_analyst">Data Analyst</option>
+                    <option value="fact_checker">Fact Checker</option>
+                  </select>
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="text-xs"
+                    style={{ color: "#ef4444" }}
+                    onClick={() => removeTask(idx)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="outline-actions">
-        <button onClick={() => onConfirm()} className="outline-approve">
-          Approve as-is
+      <div className="mt-5 flex flex-shrink-0 justify-end gap-2">
+        <button
+          className="rounded-xl border px-4 py-2 text-sm font-medium"
+          style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
+          onClick={() => onConfirm()}
+        >
+          Approve As-Is
         </button>
-        <button onClick={() => onConfirm(sections, tasks)} className="outline-submit">
-          Confirm with edits
+        <button
+          className="rounded-xl px-4 py-2 text-sm font-medium"
+          style={{ background: "var(--accent)", color: "var(--bg)" }}
+          onClick={() => onConfirm(sections, tasks)}
+        >
+          Confirm With Edits
         </button>
       </div>
     </div>

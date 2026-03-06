@@ -16,11 +16,13 @@ export interface ResearchTask {
 export interface StreamEvent {
   type:
     | "status" | "source" | "chunk" | "done" | "error"
+    | "disambiguation_required" | "disambiguation_confirmed"
     | "planning" | "researching" | "finding" | "reflecting"
     | "synthesizing" | "budget_update" | "knowledge_graph"
     | "outline_ready" | "awaiting_confirmation" | "outline_confirmed";
   data: {
     message?: string;
+    error?: string;
     text?: string;
     token?: string;
     response?: string;
@@ -44,6 +46,11 @@ export interface StreamEvent {
     research_mode?: string;
     sections?: OutlineSection[];
     research_tasks?: ResearchTask[];
+    task_id?: string;
+    agent_name?: string;
+    active_task_count?: number;
+    entity_name?: string;
+    clarification?: string;
   };
 }
 
@@ -163,8 +170,10 @@ export function streamSearch(
         : "/api/search/stream";
 
   const baseBody: Record<string, unknown> =
-    mode === "rag" || mode === "deep_search"
+    mode === "rag"
       ? { query }
+      : mode === "deep_search"
+        ? { query, session_id: sessionId }
       : { query, session_id: sessionId };
 
   const body = JSON.stringify({ ...baseBody, ...settings });
@@ -292,6 +301,23 @@ export async function confirmOutline(
     body: JSON.stringify(body),
   });
   if (!resp.ok) throw new Error(`Confirm failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function confirmDisambiguation(
+  sessionId: string,
+  apiKey: string,
+  clarification: string,
+): Promise<{ status: string }> {
+  const resp = await fetch("/api/deep-search/disambiguate/confirm", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ session_id: sessionId, clarification }),
+  });
+  if (!resp.ok) throw new Error(`Disambiguation confirm failed: ${resp.status}`);
   return resp.json();
 }
 

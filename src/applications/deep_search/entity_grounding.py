@@ -5,6 +5,7 @@ import logging
 import re
 from typing import Any
 
+from src.applications.deep_search.query_utils import normalize_research_query
 from src.applications.deep_search.models.research import EntityGrounding
 from src.core.interfaces.tool import Tool
 from src.core.llm.base import LLMProvider
@@ -21,8 +22,70 @@ _GROUNDING_SYSTEM_PROMPT = (
     '{"name": "...", "description": "2-3 sentence disambiguating description", '
     '"key_attributes": ["attribute1", "attribute2"]}\n\n'
     "Be as specific as possible to avoid confusing this entity with others "
-    "that share the same name."
+    "that share the same name. "
+    "If the query is ambiguous and no primary sources are provided, do NOT guess the domain. "
+    "Use a generic description that explicitly says the entity is ambiguous from the provided context."
 )
+
+_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
+
+
+def _query_tokens(query: str) -> list[str]:
+    return [token.lower() for token in _TOKEN_PATTERN.findall(normalize_research_query(query))]
+
+
+def _likely_ambiguous_name(name: str) -> bool:
+    tokens = _TOKEN_PATTERN.findall(name)
+    return len(tokens) == 1
+
+
+def _generic_grounding(name: str, query: str) -> dict[str, Any]:
+    query_tokens = [token for token in _query_tokens(query) if token.lower() != name.lower()]
+    return {
+        "name": name,
+        "description": (
+            f"Entity named {name} referenced in the user query. "
+            "Its domain is ambiguous from the provided context, so it should not be grounded "
+            "to a specific product category without supporting sources."
+        ),
+        "key_attributes": query_tokens[:4],
+        "needs_disambiguation": True,
+        "clarification_prompt": (
+            f"The name '{name}' is ambiguous from your query alone. "
+            "Clarify which specific product, company, or system you mean before research continues."
+        ),
+    }
+
+
+def grounding_requires_disambiguation(data: dict[str, Any]) -> bool:
+    """Return True when the grounding is too ambiguous to research safely."""
+    if bool(data.get("needs_disambiguation")):
+        return True
+    description = str(data.get("description", "")).lower()
+    return "ambiguous from the provided context" in description
+
+
+def _should_genericize_grounding(
+    *,
+    query: str,
+    primary_sources: list[dict[str, Any]],
+    data: dict[str, Any],
+) -> bool:
+    if primary_sources:
+        return False
+    name = str(data.get("name", "")).strip()
+    description = str(data.get("description", "")).strip()
+    if not name or not description or not _likely_ambiguous_name(name):
+        return False
+    query_terms = set(_query_tokens(query))
+    if name.lower() in query_terms:
+        query_terms.remove(name.lower())
+    description_terms = {
+        token.lower()
+        for token in _TOKEN_PATTERN.findall(description)
+        if len(token) >= 4 and token.lower() != name.lower()
+    }
+    return bool(description_terms) and description_terms.isdisjoint(query_terms)
 
 
 def extract_urls(query: str) -> list[str]:
@@ -101,10 +164,19 @@ async def build_entity_grounding(
             "key_attributes": [],
         }
 
+    if _should_genericize_grounding(
+        query=query,
+        primary_sources=primary_sources,
+        data=data,
+    ):
+        data = _generic_grounding(str(data.get("name", "")).strip(), query)
+
     return EntityGrounding(
         name=data.get("name", ""),
         description=data.get("description", ""),
         key_attributes=data.get("key_attributes", []),
         source_urls=source_urls,
         primary_source_content=source_text[:5000],
+        needs_disambiguation=bool(data.get("needs_disambiguation", False)),
+        clarification_prompt=str(data.get("clarification_prompt", "")),
     )

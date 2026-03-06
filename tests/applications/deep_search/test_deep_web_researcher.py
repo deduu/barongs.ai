@@ -211,3 +211,114 @@ class TestDeepWebResearcherAgent:
         result = await agent.run(context)
 
         assert len(result.metadata["findings"]) == 1
+
+    async def test_passes_crawl_overrides_and_emits_attempted_sources(self):
+        search_tool = AsyncMock()
+        search_tool.name = "search"
+        search_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="search",
+            output=[{"title": "Page", "url": "https://example.com", "snippet": "snippet"}],
+        ))
+
+        crawler_tool = AsyncMock()
+        crawler_tool.name = "deep_crawler"
+        crawler_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="deep_crawler",
+            output={"pages": [{"content": "content", "depth": 0}], "links_followed": 0},
+        ))
+
+        scorer_tool = AsyncMock()
+        scorer_tool.name = "source_scorer"
+        scorer_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="source_scorer", output={"overall_score": 0.9},
+        ))
+
+        llm = AsyncMock()
+        llm.generate = AsyncMock(return_value=LLMResponse(content="Finding.", model="test", usage={"total_tokens": 10}))
+
+        agent = DeepWebResearcherAgent(
+            llm_provider=llm,
+            search_tool=search_tool,
+            deep_crawler_tool=crawler_tool,
+            source_scorer_tool=scorer_tool,
+        )
+        context = AgentContext(
+            user_message="test",
+            metadata={
+                "crawl_depth": 1,
+                "crawl_max_pages": 2,
+                "crawl_page_timeout_seconds": 4.0,
+            },
+        )
+        result = await agent.run(context)
+
+        crawler_input = crawler_tool.execute.call_args[0][0]
+        assert crawler_input.parameters["max_depth"] == 1
+        assert crawler_input.parameters["max_pages"] == 2
+        assert crawler_input.parameters["page_timeout_seconds"] == 4.0
+        assert len(result.metadata.get("attempted_sources", [])) == 1
+
+    async def test_uses_tighter_primary_search_query_for_entity(self):
+        search_tool = AsyncMock()
+        search_tool.name = "search"
+        search_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="search",
+            output=[],
+        ))
+
+        agent = DeepWebResearcherAgent(
+            llm_provider=AsyncMock(),
+            search_tool=search_tool,
+            deep_crawler_tool=AsyncMock(),
+            source_scorer_tool=AsyncMock(),
+        )
+        context = AgentContext(
+            user_message="go and search about OpenClaw safety and risk concern",
+            metadata={"entity_grounding": {"name": "OpenClaw", "description": "A robotics system"}},
+        )
+        await agent.run(context)
+
+        search_input = search_tool.execute.call_args.args[0]
+        assert search_input.parameters["query"] == "\"OpenClaw\" safety risk"
+
+    async def test_retries_not_relevant_when_source_mentions_entity(self):
+        search_tool = AsyncMock()
+        search_tool.name = "search"
+        search_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="search",
+            output=[{"title": "OpenClaw Safety", "url": "https://example.com", "snippet": "OpenClaw safety"}],
+        ))
+
+        crawler_tool = AsyncMock()
+        crawler_tool.name = "deep_crawler"
+        crawler_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="deep_crawler",
+            output={"pages": [{"content": "OpenClaw safety details", "depth": 0}], "links_followed": 0},
+        ))
+
+        scorer_tool = AsyncMock()
+        scorer_tool.name = "source_scorer"
+        scorer_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="source_scorer", output={"overall_score": 0.8},
+        ))
+
+        llm = AsyncMock()
+        llm.generate = AsyncMock(side_effect=[
+            LLMResponse(content="NOT_RELEVANT", model="test", usage={"total_tokens": 10}),
+            LLMResponse(content="OpenClaw safety findings.", model="test", usage={"total_tokens": 20}),
+        ])
+
+        agent = DeepWebResearcherAgent(
+            llm_provider=llm,
+            search_tool=search_tool,
+            deep_crawler_tool=crawler_tool,
+            source_scorer_tool=scorer_tool,
+        )
+        context = AgentContext(
+            user_message="OpenClaw safety",
+            metadata={"entity_grounding": {"name": "OpenClaw", "description": "A robotics system"}},
+        )
+        result = await agent.run(context)
+
+        assert len(result.metadata["findings"]) == 1
+        assert result.metadata["attempted_sources"][0]["status"] == "finding_extracted_retry"

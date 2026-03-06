@@ -104,7 +104,7 @@ class TestDeepSynthesizerWithModes:
         agent = DeepSynthesizerAgent(llm_provider=mock_llm)
         context = AgentContext(
             user_message="test query",
-            metadata={"findings": []},
+            metadata={"findings": [{"finding_id": "f1", "content": "detail", "source_url": "https://a.com"}]},
         )
         await agent.run(context)
 
@@ -124,7 +124,10 @@ class TestDeepSynthesizerWithModes:
         agent = DeepSynthesizerAgent(llm_provider=mock_llm)
         context = AgentContext(
             user_message="test query",
-            metadata={"findings": [], "research_mode": "academic"},
+            metadata={
+                "findings": [{"finding_id": "f1", "content": "detail", "source_url": "https://a.com"}],
+                "research_mode": "academic",
+            },
         )
         await agent.run(context)
 
@@ -143,7 +146,10 @@ class TestDeepSynthesizerWithModes:
         agent = DeepSynthesizerAgent(llm_provider=mock_llm)
         context = AgentContext(
             user_message="test query",
-            metadata={"findings": [], "research_mode": "consultant"},
+            metadata={
+                "findings": [{"finding_id": "f1", "content": "detail", "source_url": "https://a.com"}],
+                "research_mode": "consultant",
+            },
         )
         await agent.run(context)
 

@@ -38,8 +38,15 @@ class DeepSearchSettings(AppSettings):
     # Research Mode
     default_research_mode: str = "general"
 
+    # Timeouts — deep search needs much longer than the default 30s
+    agent_timeout_seconds: float = 300.0
+    research_per_agent_timeout_seconds: float = 120.0
+
     # Budget
     research_max_iterations: int = 3
     research_max_llm_tokens: int = 100_000
     research_max_api_calls: int = 50
     research_max_time_seconds: int = 300
+
+    # Streaming admission control
+    stream_max_concurrent_requests: int = 100

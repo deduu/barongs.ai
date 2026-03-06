@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from xml.etree import ElementTree
+
+from ddgs import DDGS
 
 from src.core.http.client import HttpClientPool
 from src.core.interfaces.tool import Tool
@@ -15,7 +18,7 @@ ARXIV_NS = {"atom": "http://www.w3.org/2005/Atom"}
 
 
 class AcademicSearchTool(Tool):
-    """Search academic papers via Semantic Scholar and arXiv APIs."""
+    """Search academic papers via Semantic Scholar/arXiv and Scholar-indexed web results."""
 
     def __init__(
         self,
@@ -37,7 +40,7 @@ class AcademicSearchTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Search academic papers from Semantic Scholar and arXiv."
+        return "Search academic papers from Semantic Scholar, arXiv, and Google Scholar-indexed web results."
 
     @property
     def input_schema(self) -> dict[str, Any]:
@@ -45,10 +48,15 @@ class AcademicSearchTool(Tool):
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Academic search query"},
+                "query_variants": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional alternative query rewrites to improve recall.",
+                },
                 "sources": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Sources to query: 'semantic_scholar', 'arxiv'. Default: both.",
+                    "description": "Sources to query: 'semantic_scholar', 'arxiv', 'google_scholar_web'. Default: semantic_scholar + arxiv.",
                 },
             },
             "required": ["query"],
@@ -122,20 +130,89 @@ class AcademicSearchTool(Tool):
             })
         return results
 
+    async def _search_google_scholar_web(self, query: str) -> list[dict[str, Any]]:
+        """Best-effort Scholar web fallback via DDGS using site filter."""
+        scholar_query = f"site:scholar.google.com {query}"
+
+        def _search_sync() -> list[dict[str, Any]]:
+            raw = DDGS().text(scholar_query, max_results=self._max_results)
+            results: list[dict[str, Any]] = []
+            for item in raw:
+                title = item.get("title", "")
+                url = item.get("href", "")
+                snippet = item.get("body", "")
+                if not url:
+                    continue
+                results.append({
+                    "title": title,
+                    "url": url,
+                    "abstract": snippet,
+                    "authors": [],
+                    "year": None,
+                    "citation_count": 0,
+                    "source": "google_scholar_web",
+                })
+            return results
+
+        try:
+            return await asyncio.to_thread(_search_sync)
+        except Exception:
+            # Scholar web fallback should never fail the entire academic search.
+            return []
+
+    @staticmethod
+    def _dedupe(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seen: set[str] = set()
+        deduped: list[dict[str, Any]] = []
+        for item in results:
+            key = (item.get("url") or item.get("title") or "").strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+        return deduped
+
     async def execute(self, tool_input: ToolInput) -> ToolResult:
         query = tool_input.parameters["query"]
+        query_variants_raw = tool_input.parameters.get("query_variants", [])
         sources = tool_input.parameters.get("sources", ["semantic_scholar", "arxiv"])
+        queries: list[str] = []
+        seen_queries: set[str] = set()
+        for candidate in [query, *query_variants_raw]:
+            if not isinstance(candidate, str):
+                continue
+            compact = " ".join(candidate.split()).strip()
+            if not compact:
+                continue
+            lowered = compact.lower()
+            if lowered in seen_queries:
+                continue
+            seen_queries.add(lowered)
+            queries.append(compact)
+
+        if not queries:
+            queries = [query]
 
         async def _search() -> list[dict[str, Any]]:
             all_results: list[dict[str, Any]] = []
-            if "semantic_scholar" in sources:
-                all_results.extend(await self._search_semantic_scholar(query))
-            if "arxiv" in sources:
-                all_results.extend(await self._search_arxiv(query))
-            return all_results
+            for candidate in queries:
+                if "semantic_scholar" in sources:
+                    all_results.extend(await self._search_semantic_scholar(candidate))
+                if "arxiv" in sources:
+                    all_results.extend(await self._search_arxiv(candidate))
+                if "google_scholar_web" in sources:
+                    all_results.extend(await self._search_google_scholar_web(candidate))
+                deduped = self._dedupe(all_results)
+                if len(deduped) >= self._max_results:
+                    return deduped[: self._max_results]
+            return self._dedupe(all_results)[: self._max_results]
 
         try:
             output = await self._circuit_breaker.call(_search)
-            return ToolResult(tool_name=self.name, output=output)
+            return ToolResult(
+                tool_name=self.name,
+                output=output,
+                metadata={"queries_used": queries},
+            )
         except Exception as exc:
             return ToolResult(tool_name=self.name, output=None, success=False, error=str(exc))

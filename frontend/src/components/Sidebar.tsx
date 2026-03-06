@@ -28,6 +28,8 @@ interface SidebarProps {
   activePage: ActivePage;
   projects: Project[];
   activeProjectId: string | null;
+  isConversationLocked?: boolean;
+  conversationLockReason?: string;
   onNewChat: () => void;
   onLoadConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
@@ -177,6 +179,8 @@ export default function Sidebar({
   activePage,
   projects,
   activeProjectId,
+  isConversationLocked = false,
+  conversationLockReason = "Finish the current run before starting or switching chats.",
   onNewChat,
   onLoadConversation,
   onDeleteConversation,
@@ -211,6 +215,9 @@ export default function Sidebar({
 
   const sidebarWidth = collapsed && !isMobile ? "var(--sidebar-rail)" : "var(--sidebar-w)";
   const isExpanded = !collapsed || isMobile;
+  const newChatTitle = isConversationLocked
+    ? conversationLockReason
+    : "New chat (Ctrl+K)";
 
   return (
     <>
@@ -248,16 +255,14 @@ export default function Sidebar({
       >
         {/* Header */}
         <div
-          className="flex h-[var(--header-h)] flex-shrink-0 items-center justify-between border-b px-3"
+          className={`flex h-[var(--header-h)] flex-shrink-0 items-center border-b px-3 ${isExpanded ? "justify-between" : "justify-center"}`}
           style={{ borderColor: "var(--border)" }}
         >
-          {isExpanded ? (
+          {isExpanded && (
             <div className="flex items-center gap-2.5 text-base font-bold">
               <BarongsaiLogo size={28} className="flex-shrink-0" />
               <span style={{ color: "var(--text)" }}>Barongsai</span>
             </div>
-          ) : (
-            <BarongsaiLogo size={28} className="mx-auto" />
           )}
 
           {!isMobile && (
@@ -287,15 +292,24 @@ export default function Sidebar({
         {/* New chat button — outlined style */}
         <div className="px-2.5 pt-3">
           <button
-            className="flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all hover:bg-[var(--surface-2)] active:scale-[0.98]"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all hover:bg-[var(--surface-2)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
             style={{ borderColor: "var(--border)", color: "var(--text)" }}
             onClick={onNewChat}
-            title="New chat (Ctrl+K)"
+            title={newChatTitle}
             aria-label="New chat"
+            disabled={isConversationLocked}
           >
             <PlusIcon size={16} />
             {isExpanded && <span>New chat</span>}
           </button>
+          {isExpanded && isConversationLocked && (
+            <p
+              className="px-1.5 pt-2 text-[11px] leading-relaxed"
+              style={{ color: "var(--text-muted)" }}
+            >
+              {conversationLockReason}
+            </p>
+          )}
         </div>
 
         {/* Nav links */}
@@ -457,16 +471,26 @@ export default function Sidebar({
                   return (
                     <div
                       key={conv.id}
-                      className="group relative flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] transition-all"
+                      className="group relative flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] transition-all"
                       style={{
                         color: isActive ? "var(--text)" : "var(--text-secondary)",
                         background: isActive ? "var(--accent-dim)" : undefined,
+                        cursor: isConversationLocked ? "not-allowed" : "pointer",
+                        opacity: isConversationLocked && !isActive ? 0.6 : 1,
                       }}
-                      onClick={() => onLoadConversation(conv.id)}
+                      onClick={() => {
+                        if (isConversationLocked) return;
+                        onLoadConversation(conv.id);
+                      }}
                       role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === "Enter") onLoadConversation(conv.id); }}
+                      tabIndex={isConversationLocked ? -1 : 0}
+                      onKeyDown={(e) => {
+                        if (isConversationLocked) return;
+                        if (e.key === "Enter") onLoadConversation(conv.id);
+                      }}
                       aria-current={isActive ? "true" : undefined}
+                      aria-disabled={isConversationLocked}
+                      title={isConversationLocked ? conversationLockReason : conv.title}
                     >
                       <MessageIcon
                         size={14}
@@ -480,7 +504,7 @@ export default function Sidebar({
                           <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                             {projects.length > 0 && (
                               <select
-                                className="h-6 w-6 cursor-pointer appearance-none rounded bg-transparent text-center transition-colors hover:bg-[var(--surface-2)]"
+                                className="h-6 w-6 cursor-pointer appearance-none rounded bg-transparent text-center transition-colors hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-45"
                                 style={{ color: "var(--text-muted)", fontSize: "10px" }}
                                 value={conv.projectId ?? ""}
                                 onClick={(e) => e.stopPropagation()}
@@ -490,6 +514,7 @@ export default function Sidebar({
                                 }}
                                 title="Move to project"
                                 aria-label="Move to project"
+                                disabled={isConversationLocked}
                               >
                                 <option value="">No project</option>
                                 {projects.map((p) => (
@@ -498,7 +523,7 @@ export default function Sidebar({
                               </select>
                             )}
                             <button
-                              className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-[var(--surface-2)]"
+                              className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-45"
                               style={{ color: conv.pinned ? "var(--accent)" : "var(--text-muted)" }}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -506,11 +531,12 @@ export default function Sidebar({
                               }}
                               title={conv.pinned ? "Unpin" : "Pin"}
                               aria-label={conv.pinned ? "Unpin conversation" : "Pin conversation"}
+                              disabled={isConversationLocked}
                             >
                               <PinIcon size={12} />
                             </button>
                             <button
-                              className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:text-red-500"
+                              className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-45"
                               style={{ color: "var(--text-muted)" }}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -518,6 +544,7 @@ export default function Sidebar({
                               }}
                               title="Delete"
                               aria-label="Delete conversation"
+                              disabled={isConversationLocked}
                             >
                               <TrashIcon size={12} />
                             </button>

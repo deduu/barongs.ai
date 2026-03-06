@@ -170,3 +170,21 @@ class TestBuildEntityGrounding:
 
         grounding = await build_entity_grounding("test", [], llm)
         assert grounding.name == "Auditi"
+
+    @pytest.mark.asyncio
+    async def test_genericizes_ambiguous_single_token_without_sources(self):
+        llm = AsyncMock()
+        llm.generate = AsyncMock(return_value=LLMResponse(
+            content=json.dumps({
+                "name": "OpenClaw",
+                "description": "A robotic gripper system for industrial automation",
+                "key_attributes": ["robotics"],
+            }),
+            model="test",
+        ))
+
+        grounding = await build_entity_grounding("OpenClaw safety and risk", [], llm)
+        assert grounding.name == "OpenClaw"
+        assert "ambiguous" in grounding.description.lower()
+        assert grounding.needs_disambiguation is True
+        assert grounding.clarification_prompt != ""

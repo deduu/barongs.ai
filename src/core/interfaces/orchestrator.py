@@ -49,9 +49,18 @@ class Orchestrator:
     def strategy(self, new_strategy: OrchestratorStrategy) -> None:
         self._strategy = new_strategy
 
-    async def run(self, context: AgentContext) -> AgentResult:
-        """Execute the current strategy with timeout enforcement."""
+    async def run(
+        self,
+        context: AgentContext,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> AgentResult:
+        """Execute the current strategy with timeout enforcement.
+
+        ``timeout_seconds`` can override the orchestrator default per request.
+        """
+        effective_timeout = self._timeout_seconds if timeout_seconds is None else timeout_seconds
         return await asyncio.wait_for(
             self._strategy.execute(self._agents, context),
-            timeout=self._timeout_seconds,
+            timeout=effective_timeout,
         )

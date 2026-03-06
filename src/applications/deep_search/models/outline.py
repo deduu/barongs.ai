@@ -37,3 +37,10 @@ class OutlineConfirmation(BaseModel):
     approved: bool = True
     sections: list[OutlineSection] | None = None
     research_tasks: list[ResearchTask] | None = None
+
+
+class DisambiguationConfirmation(BaseModel):
+    """User clarification for an ambiguous entity before research begins."""
+
+    session_id: str
+    clarification: str

@@ -112,8 +112,14 @@ cp .env.example .env
 ### Run Locally
 
 ```bash
-# Search agent (Perplexity-style chatbot)
+# Full stack (search + deep search + UI) — recommended
+uvicorn src.main:app --reload --port 8000
+
+# Search agent only (no deep search)
 uvicorn src.applications.search_agent.main:app --reload --port 8000
+
+# Deep search only
+uvicorn src.applications.deep_search.main:app --reload --port 8000
 
 # Example app (minimal reference)
 uvicorn src.applications.example_app.main:app --reload --port 8000

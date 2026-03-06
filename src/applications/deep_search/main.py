@@ -159,7 +159,10 @@ def wire_deep_search(
     ]
 
     # --- Orchestrator ---
-    strategy = ResearchDAGStrategy(max_iterations=settings.research_max_iterations)
+    strategy = ResearchDAGStrategy(
+        max_iterations=settings.research_max_iterations,
+        per_agent_timeout=settings.research_per_agent_timeout_seconds,
+    )
     orchestrator = Orchestrator(
         strategy=strategy,
         agents=all_agents,
@@ -186,6 +189,9 @@ def wire_deep_search(
         model=settings.llm_model,
         session_store=session_store,
         timeout_seconds=settings.agent_timeout_seconds,
+        research_max_llm_tokens=settings.research_max_llm_tokens,
+        research_max_api_calls=settings.research_max_api_calls,
+        research_max_time_seconds=settings.research_max_time_seconds,
     )
 
     router = create_router(
@@ -193,6 +199,7 @@ def wire_deep_search(
         settings,
         pipeline=pipeline,
         session_store=session_store,
+        stream_max_concurrent_requests=settings.stream_max_concurrent_requests,
         auth_dependency=auth_dependency,
     )
 
