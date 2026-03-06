@@ -179,7 +179,7 @@ class TestStreamableDeepSearchPipeline:
         assert any("fetching" in e["data"].get("status", "") for e in status_events)
         assert any("entity grounded" in e["data"].get("status", "") for e in status_events)
 
-        # Planner should receive entity_grounding in metadata
+        # Planner orchestrator delegates to planner.run — check the context it received
         planner_call_ctx = planner.run.call_args[0][0]
         assert "entity_grounding" in planner_call_ctx.metadata
         assert planner_call_ctx.metadata["entity_grounding"]["name"] == "Auditi"
@@ -276,3 +276,93 @@ class TestStreamableDeepSearchPipeline:
         synth_findings = synth_ctx_holder[0].metadata["findings"]
         assert len(synth_findings) == 1
         assert synth_findings[0]["finding_id"] == "f2"
+
+    async def test_planner_uses_orchestrator(self):
+        """Verify the planner call goes through an Orchestrator (has timeout)."""
+        planner = AsyncMock()
+        planner.name = "research_planner"
+        planner.run = AsyncMock(return_value=AgentResult(
+            agent_name="research_planner",
+            response="Plan created",
+            metadata={
+                "research_plan": {
+                    "original_query": "test",
+                    "tasks": [],
+                    "max_iterations": 1,
+                },
+            },
+        ))
+
+        synthesizer = AsyncMock()
+
+        async def mock_stream(ctx):
+            yield "Report."
+
+        synthesizer.stream_run = mock_stream
+
+        pipeline = StreamableDeepSearchPipeline(
+            planner=planner,
+            synthesizer=synthesizer,
+            strategy=AsyncMock(),
+            agents=[],
+            timeout_seconds=60.0,
+        )
+
+        # Verify internal orchestrator exists and has correct timeout
+        assert hasattr(pipeline, "_planner_orchestrator")
+        assert pipeline._planner_orchestrator._timeout_seconds == 60.0
+
+        context = AgentContext(user_message="test")
+        events = []
+        async for event in pipeline.stream_run(context):
+            events.append(event)
+
+        # Planner should still be called (via orchestrator)
+        planner.run.assert_awaited_once()
+
+    async def test_dag_uses_orchestrator(self):
+        """Verify DAG research goes through an Orchestrator."""
+        planner = AsyncMock()
+        planner.name = "research_planner"
+        planner.run = AsyncMock(return_value=AgentResult(
+            agent_name="research_planner",
+            response="Plan",
+            metadata={"research_plan": {
+                "original_query": "test",
+                "tasks": [{"task_id": "t1", "query": "q", "task_type": "secondary_web", "depends_on": [], "agent_name": "deep_web_researcher"}],
+                "max_iterations": 1,
+            }},
+        ))
+
+        strategy = AsyncMock()
+        strategy.execute = AsyncMock(return_value=AgentResult(
+            agent_name="research_dag",
+            response="Done",
+            metadata={"findings": []},
+        ))
+
+        synthesizer = AsyncMock()
+
+        async def mock_stream(ctx):
+            yield "Report."
+
+        synthesizer.stream_run = mock_stream
+
+        pipeline = StreamableDeepSearchPipeline(
+            planner=planner,
+            synthesizer=synthesizer,
+            strategy=strategy,
+            agents=[],
+            timeout_seconds=120.0,
+        )
+
+        assert hasattr(pipeline, "_dag_orchestrator")
+        assert pipeline._dag_orchestrator._timeout_seconds == 120.0
+
+        context = AgentContext(user_message="test")
+        events = []
+        async for event in pipeline.stream_run(context):
+            events.append(event)
+
+        # DAG strategy should be called (via orchestrator.run -> strategy.execute)
+        strategy.execute.assert_awaited_once()

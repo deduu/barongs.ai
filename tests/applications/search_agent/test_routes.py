@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 
 from src.applications.search_agent.config import SearchAgentSettings
 from src.applications.search_agent.routes import create_router
+from src.applications.search_agent.streaming_pipeline import StreamableSearchPipeline
 from src.core.interfaces.orchestrator import Orchestrator
 from src.core.models.results import AgentResult
 from src.core.server.factory import create_app
@@ -137,22 +138,19 @@ class TestStreamErrorHandling:
             error_data = json.loads(error_events[0]["data"])
             assert "error" in error_data
 
-    async def test_stream_with_agents_error_emits_error_event(
+    async def test_stream_with_pipeline_error_emits_error_event(
         self, settings: SearchAgentSettings
     ):
-        """When sub-agent streaming raises, the stream should emit an error event."""
+        """When streamable_pipeline.research() raises, the stream should emit an error event."""
         mock_orch = AsyncMock(spec=Orchestrator)
-        mock_researcher = AsyncMock()
-        mock_researcher.run = AsyncMock(side_effect=RuntimeError("Research failed"))
-
-        mock_synthesizer = AsyncMock()
+        mock_pipeline = AsyncMock(spec=StreamableSearchPipeline)
+        mock_pipeline.research = AsyncMock(side_effect=RuntimeError("Research failed"))
 
         app = create_app(settings)
         router = create_router(
             mock_orch,
             settings,
-            web_researcher=mock_researcher,
-            synthesizer=mock_synthesizer,
+            streamable_pipeline=mock_pipeline,
         )
         app.include_router(router)
 
