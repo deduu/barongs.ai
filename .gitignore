@@ -56,3 +56,6 @@ frontend/dist/
 # Distribution
 *.tar.gz
 *.whl
+
+# Roadmap (internal only)
+/roadmap/

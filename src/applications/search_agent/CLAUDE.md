@@ -2,9 +2,13 @@
 
 ## Architecture
 - Perplexity/Grok-style search chatbot
-- Pipeline: QueryAnalyzer → WebResearcher → Synthesizer (for search queries)
-- Router: search vs direct answer path via QueryAnalyzer classification
-- SearchPipelineAgent wraps the full pipeline as a single composite Agent
+- Pipeline: QueryAnalyzer → SearchPathAgent → (or DirectAnswerer)
+- SearchPathAgent wraps WebResearcher → Synthesizer behind an Orchestrator
+  (PipelineWithMetadataStrategy) so sources flow from researcher to synthesizer
+- SearchPipelineAgent delegates all agent calls through Orchestrator instances
+- StreamableSearchPipeline is a presentation adapter for SSE streaming;
+  it uses an Orchestrator for the research phase, then calls
+  synthesizer.stream_run() directly (presentation-layer streaming)
 
 ## Key Rules
 - All LLM calls go through src/core/llm/ providers (never import openai directly)

@@ -1,16 +1,19 @@
 # Barongsai — Development Rules
 
 ## Project Overview
+
 Barongsai is a production-ready Python AI agent framework. It provides
 ABCs/Protocols for Agent, Tool, Memory, and Orchestrator, with a strategy
 pattern for orchestration and a modular application structure.
 
 ## Tech Stack
+
 - Python 3.11+, FastAPI, Pydantic v2, asyncio, httpx
 - Testing: pytest + pytest-asyncio
 - Linting: ruff | Type checking: mypy (strict mode)
 
 ## Commands
+
 - `py -m pytest` — run all tests
 - `py -m pytest tests/core/` — run core tests only
 - `py -m pytest -x -q` — stop on first failure, quiet output
@@ -20,6 +23,7 @@ pattern for orchestration and a modular application structure.
 - `make test` / `make lint` / `make typecheck` — shortcuts
 
 ## Production Rules (MANDATORY)
+
 1. **All I/O must be async.** No blocking calls. Use httpx, not requests.
 2. **Pydantic validation on ALL inputs.** Every endpoint, every agent context,
    every tool input uses a Pydantic model.
@@ -32,6 +36,7 @@ pattern for orchestration and a modular application structure.
 9. **NEVER log sensitive data.** Use src/core/utils/sanitize.py for redaction.
 
 ## Development Workflow (MANDATORY)
+
 1. **TDD: Write tests BEFORE implementation** for agents, tools, orchestrator.
    - Test file must exist and have failing tests before the implementation file.
 2. **Plan mode for multi-file changes.** If a change touches 3+ files, use
@@ -46,6 +51,7 @@ pattern for orchestration and a modular application structure.
    session start.
 
 ## Architecture
+
 - `src/core/` — Framework library (interfaces, models, orchestrator, server)
 - `src/applications/` — Specific apps built on core
 - Each application imports from core, defines its own agents/tools/config
@@ -57,6 +63,7 @@ pattern for orchestration and a modular application structure.
 - Dependencies are unidirectional: applications → core, never core → applications
 
 ## Core Principles
+
 - **Simplicity first.** Make every change as simple as possible. Minimal code.
 - **Root causes, not band-aids.** No temporary fixes. Senior developer standards.
 - **Minimal impact.** Changes touch only what's necessary. Avoid introducing bugs.
@@ -64,10 +71,12 @@ pattern for orchestration and a modular application structure.
   a more elegant way?" Skip this for simple, obvious fixes.
 
 ## Code Style
+
 - Absolute imports from `src.` prefix
 - Type annotations on all public functions
 - `from __future__ import annotations` at top of every file
 
 ## Meta
+
 If this file exceeds 100 lines, split into per-directory CLAUDE.md files.
 If any rule conflicts with the current codebase patterns, flag it.
