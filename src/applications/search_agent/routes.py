@@ -3,21 +3,22 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncGenerator, Callable, Coroutine
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from src.applications.search_agent.agents.synthesizer import SynthesizerAgent
 from src.applications.search_agent.models.streaming import StreamEventType
-from src.core.interfaces.agent import Agent
 from src.core.interfaces.orchestrator import Orchestrator
-from src.core.jobs.service import JobService
 from src.core.middleware.auth import create_api_key_dependency
 from src.core.models.auth import AuthContext
 from src.core.models.config import AppSettings
 from src.core.models.context import AgentContext
+
+if TYPE_CHECKING:
+    from src.applications.search_agent.streaming_pipeline import StreamableSearchPipeline
+    from src.core.jobs.service import JobService
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,7 @@ def create_router(
     orchestrator: Orchestrator,
     settings: AppSettings,
     *,
-    web_researcher: Agent | None = None,
-    synthesizer: SynthesizerAgent | None = None,
+    streamable_pipeline: StreamableSearchPipeline | None = None,
     auth_dependency: Callable[..., Coroutine[Any, Any, AuthContext]] | None = None,
     job_service: JobService | None = None,
 ) -> APIRouter:
@@ -92,8 +92,7 @@ def create_router(
     ) -> EventSourceResponse:
         async def event_generator() -> AsyncGenerator[dict[str, str], None]:
             try:
-                # If sub-agents are available, stream incrementally
-                if web_researcher and synthesizer:
+                if streamable_pipeline:
                     yield {
                         "event": StreamEventType.STATUS,
                         "data": json.dumps({"message": "Searching..."}),
@@ -108,14 +107,14 @@ def create_router(
                     if request.search_max_results is not None:
                         settings_meta["search_max_results"] = request.search_max_results
 
-                    # Step 1: Run web researcher (search + fetch + compile)
+                    # Step 1: Run web researcher via pipeline orchestrator
                     context = AgentContext(
                         user_message=request.query,
                         tenant_id=auth.tenant_id,
                         session_id=request.session_id,
-                        metadata={"refined_queries": [request.query], **settings_meta},
+                        metadata=settings_meta,
                     )
-                    research_result = await web_researcher.run(context)
+                    research_result = await streamable_pipeline.research(context)
                     sources: list[dict[str, Any]] = research_result.metadata.get(
                         "sources", []
                     )
@@ -142,15 +141,11 @@ def create_router(
                         "data": json.dumps({"message": "Writing answer..."}),
                     }
 
-                    # Step 2: Stream synthesizer tokens
-                    synth_context = AgentContext(
-                        user_message=request.query,
-                        tenant_id=auth.tenant_id,
-                        session_id=request.session_id,
-                        metadata={"sources": sources, **settings_meta},
-                    )
+                    # Step 2: Stream synthesizer tokens via pipeline
                     full_response = ""
-                    async for token in synthesizer.stream_run(synth_context):
+                    async for token in streamable_pipeline.stream_synthesize(
+                        context, sources
+                    ):
                         full_response += token
                         yield {
                             "event": StreamEventType.CHUNK,

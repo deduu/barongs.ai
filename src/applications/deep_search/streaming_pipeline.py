@@ -13,9 +13,11 @@ from src.applications.deep_search.models.outline import OutlineSection, Research
 from src.applications.deep_search.models.streaming import DeepSearchEventType
 from src.applications.deep_search.session_store import SessionStore
 from src.core.interfaces.agent import Agent
+from src.core.interfaces.orchestrator import Orchestrator
 from src.core.interfaces.tool import Tool
 from src.core.llm.base import LLMProvider
 from src.core.models.context import AgentContext
+from src.core.orchestrator.strategies.single_agent import SingleAgentStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +71,21 @@ class StreamableDeepSearchPipeline:
         model: str = "gpt-4o",
         session_store: SessionStore | None = None,
         outline_timeout: float = 600.0,
+        timeout_seconds: float = 300.0,
     ) -> None:
-        self._planner = planner
+        self._planner_orchestrator = Orchestrator(
+            strategy=SingleAgentStrategy(),
+            agents=[planner],
+            timeout_seconds=timeout_seconds,
+        )
         self._synthesizer = synthesizer
         self._strategy = strategy
         self._agents = agents
+        self._dag_orchestrator = Orchestrator(
+            strategy=strategy,
+            agents=agents,
+            timeout_seconds=timeout_seconds,
+        )
         self._content_fetcher = content_fetcher
         self._llm = llm_provider
         self._model = model
@@ -143,7 +155,7 @@ class StreamableDeepSearchPipeline:
             # Phase 1: Planning
             yield self._event(DeepSearchEventType.PLANNING, {"status": "creating research plan"})
 
-            plan_result = await self._planner.run(enriched_context)
+            plan_result = await self._planner_orchestrator.run(enriched_context)
             plan = plan_result.metadata.get("research_plan", {})
 
             yield self._event(
@@ -230,7 +242,7 @@ class StreamableDeepSearchPipeline:
                     }
                 )
 
-                dag_result = await self._strategy.execute(self._agents, research_context)
+                dag_result = await self._dag_orchestrator.run(research_context)
                 findings: list[dict[str, Any]] = dag_result.metadata.get("findings", [])
                 misattributed_ids = dag_result.metadata.get("misattributed_ids", [])
 

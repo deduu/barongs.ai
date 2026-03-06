@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from src.core.interfaces.agent import Agent
+from src.core.interfaces.orchestrator import Orchestrator
 from src.core.models.context import AgentContext
 from src.core.models.results import AgentResult
+from src.core.orchestrator.strategies.single_agent import SingleAgentStrategy
 
 
 class SearchPipelineAgent(Agent):
@@ -11,20 +13,29 @@ class SearchPipelineAgent(Agent):
     Routes between search path (QueryAnalyzer → WebResearcher → Synthesizer)
     and direct answer path based on query classification.
 
-    From the Orchestrator's perspective, this is a single agent.
+    All agent execution is delegated through Orchestrator instances.
+    From the top-level Orchestrator's perspective, this is a single agent.
     """
 
     def __init__(
         self,
         query_analyzer: Agent,
-        web_researcher: Agent,
-        synthesizer: Agent,
+        search_path: Agent,
         direct_answerer: Agent,
+        *,
+        timeout_seconds: float = 30.0,
     ) -> None:
-        self._query_analyzer = query_analyzer
-        self._web_researcher = web_researcher
-        self._synthesizer = synthesizer
-        self._direct_answerer = direct_answerer
+        self._analyzer_orchestrator = Orchestrator(
+            strategy=SingleAgentStrategy(),
+            agents=[query_analyzer],
+            timeout_seconds=timeout_seconds,
+        )
+        self._search_path = search_path  # SearchPathAgent (has internal orchestrator)
+        self._direct_orchestrator = Orchestrator(
+            strategy=SingleAgentStrategy(),
+            agents=[direct_answerer],
+            timeout_seconds=timeout_seconds,
+        )
 
     @property
     def name(self) -> str:
@@ -36,7 +47,7 @@ class SearchPipelineAgent(Agent):
 
     async def run(self, context: AgentContext) -> AgentResult:
         # Step 1: Analyze and refine the query for better search results
-        analysis_result = await self._query_analyzer.run(context)
+        analysis_result = await self._analyzer_orchestrator.run(context)
         query_type: str = analysis_result.metadata.get("query_type", "search")
         refined_queries: list[str] = analysis_result.metadata.get(
             "refined_queries", [context.user_message]
@@ -44,7 +55,7 @@ class SearchPipelineAgent(Agent):
 
         # Direct answer path — no web search needed
         if query_type == "direct":
-            direct_result = await self._direct_answerer.run(context)
+            direct_result = await self._direct_orchestrator.run(context)
             return AgentResult(
                 agent_name=self.name,
                 response=direct_result.response,
@@ -56,22 +67,15 @@ class SearchPipelineAgent(Agent):
         research_context = context.model_copy(
             update={"metadata": {**context.metadata, "refined_queries": refined_queries}}
         )
-        research_result = await self._web_researcher.run(research_context)
-
-        # Step 3: Synthesize from sources
-        sources = research_result.metadata.get("sources", [])
-        synth_context = context.model_copy(
-            update={"metadata": {**context.metadata, "sources": sources}}
-        )
-        synth_result = await self._synthesizer.run(synth_context)
+        search_result = await self._search_path.run(research_context)
 
         return AgentResult(
             agent_name=self.name,
-            response=synth_result.response,
+            response=search_result.response,
             metadata={
-                "sources": sources,
+                "sources": search_result.metadata.get("sources", []),
                 "query_type": query_type,
                 "refined_queries": refined_queries,
             },
-            token_usage=synth_result.token_usage,
+            token_usage=search_result.token_usage,
         )
