@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import type { ChatMode, Source } from "./types";
 import { getString, setItem } from "./lib/storage";
 import { useTheme } from "./hooks/useTheme";
@@ -18,6 +19,7 @@ import SettingsModal from "./components/SettingsModal";
 import WelcomeScreen from "./components/WelcomeScreen";
 import KnowledgeBase from "./components/KnowledgeBase";
 import LoginPage from "./components/LoginPage";
+import PageTransition from "./components/PageTransition";
 import {
   MenuIcon,
   MoonIcon,
@@ -58,7 +60,7 @@ export default function App() {
     togglePin,
     saveCurrentConversation,
     assignProject,
-  } = useConversations();
+  } = useConversations(auth.user?.id ?? null);
 
   /* ── Projects ────────────────────────────────────────────── */
   const {
@@ -331,38 +333,44 @@ export default function App() {
           </div>
         </header>
 
-        {activePage === "knowledge-base" ? (
-          <KnowledgeBase
-            documents={rag.documents}
-            isLoading={rag.isLoading}
-            isIngesting={rag.isIngesting}
-            error={rag.error}
-            apiKey={bearerToken}
-            onUploadFile={rag.uploadFile}
-            onUploadText={rag.uploadText}
-            onDelete={rag.removeDocument}
-            onRefresh={rag.refresh}
-          />
-        ) : showWelcome ? (
-          <WelcomeScreen onSend={handleQuickSend} chatMode={chatMode} onChatModeChange={setChatMode} />
-        ) : (
-          <>
-            <MessageList
-              messages={messages}
-              isStreaming={isStreaming}
-              statusMessage={statusMessage}
-              selectedModel={selectedModel}
-              chatMode={chatMode}
-              onSourceClick={openSource}
-            />
-            <ChatInput
-              disabled={isStreaming}
-              chatMode={chatMode}
-              onChatModeChange={setChatMode}
-              onSend={send}
-            />
-          </>
-        )}
+        <AnimatePresence mode="wait">
+          {activePage === "knowledge-base" ? (
+            <PageTransition pageKey="knowledge-base">
+              <KnowledgeBase
+                documents={rag.documents}
+                isLoading={rag.isLoading}
+                isIngesting={rag.isIngesting}
+                error={rag.error}
+                apiKey={bearerToken}
+                onUploadFile={rag.uploadFile}
+                onUploadText={rag.uploadText}
+                onDelete={rag.removeDocument}
+                onRefresh={rag.refresh}
+              />
+            </PageTransition>
+          ) : showWelcome ? (
+            <PageTransition pageKey="welcome">
+              <WelcomeScreen onSend={handleQuickSend} chatMode={chatMode} onChatModeChange={setChatMode} />
+            </PageTransition>
+          ) : (
+            <PageTransition pageKey="chat">
+              <MessageList
+                messages={messages}
+                isStreaming={isStreaming}
+                statusMessage={statusMessage}
+                selectedModel={selectedModel}
+                chatMode={chatMode}
+                onSourceClick={openSource}
+              />
+              <ChatInput
+                disabled={isStreaming}
+                chatMode={chatMode}
+                onChatModeChange={setChatMode}
+                onSend={send}
+              />
+            </PageTransition>
+          )}
+        </AnimatePresence>
       </main>
 
       <SourcePanel

@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { motion } from "framer-motion";
 import type { ChatMode } from "../types";
 import {
   SendIcon,
@@ -60,17 +61,27 @@ export default function WelcomeScreen({ onSend, chatMode, onChatModeChange }: We
   );
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 px-5 py-10">
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 overflow-y-auto px-5 py-10">
       {/* Heading */}
-      <h1
-        className="text-center text-3xl font-semibold sm:text-4xl animate-fade-in"
+      <motion.h1
+        className="text-center text-3xl font-semibold sm:text-4xl"
         style={{ color: "var(--text)" }}
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
       >
         What can I do for you?
-      </h1>
+      </motion.h1>
 
       {/* Main input */}
-      <div className="w-full max-w-2xl animate-fade-in-up stagger-1">
+      <motion.div
+        className="w-full max-w-2xl"
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
+      >
         <div
           className="rounded-2xl border"
           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
@@ -78,7 +89,7 @@ export default function WelcomeScreen({ onSend, chatMode, onChatModeChange }: We
           <div className="px-4 pt-4 pb-2">
             <textarea
               ref={inputRef}
-              className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-[var(--text-muted)]"
+              className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/25 rounded-xl placeholder:text-[var(--text-muted)]"
               style={{ color: "var(--text)", minHeight: 60, maxHeight: 160, fontFamily: "inherit" }}
               placeholder={chatMode === "rag" ? "Ask about your documents..." : chatMode === "deep_search" ? "Ask a research question..." : "Ask anything..."}
               rows={2}
@@ -126,46 +137,70 @@ export default function WelcomeScreen({ onSend, chatMode, onChatModeChange }: We
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Connect your tools */}
-      <div className="flex flex-col items-center gap-2 animate-fade-in-up stagger-2">
+      <motion.div
+        className="flex flex-col items-center gap-2"
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
+      >
         <span className="text-[13px]" style={{ color: "var(--text-muted)" }}>
           Connect your tools to Barongsai
         </span>
-        <div className="flex items-center gap-2">
+        <motion.div
+          className="flex items-center gap-2"
+          initial="initial"
+          whileInView="animate"
+          viewport={{ once: true }}
+          variants={{ animate: { transition: { staggerChildren: 0.06, delayChildren: 0.25 } } }}
+        >
           {toolItems.map(({ icon: Icon, color, label }) => (
-            <div
+            <motion.div
               key={label}
+              variants={{ initial: { opacity: 0, scale: 0.8 }, animate: { opacity: 1, scale: 1 } }}
               className="flex h-8 w-8 items-center justify-center rounded-full border transition-colors hover:bg-[var(--surface-2)]"
               style={{ borderColor: "var(--border)", color }}
               title={label}
             >
               <Icon size={15} />
-            </div>
+            </motion.div>
           ))}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Action chips */}
-      <div className="flex flex-wrap justify-center gap-2 animate-fade-in-up stagger-3">
+      <motion.div
+        className="flex flex-wrap justify-center gap-2"
+        initial="initial"
+        whileInView="animate"
+        viewport={{ once: true }}
+        variants={{ animate: { transition: { staggerChildren: 0.06, delayChildren: 0.3 } } }}
+      >
         {actionChips.map(({ icon: Icon, label }) => (
-          <button
+          <motion.button
             key={label}
+            variants={{ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } }}
             className="flex items-center gap-2 rounded-full border px-4 py-2 text-[13px] transition-all hover:bg-[var(--surface-2)] active:scale-[0.97]"
             style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
             onClick={() => onSend(label)}
           >
             <Icon size={14} />
             <span>{label}</span>
-          </button>
+          </motion.button>
         ))}
-      </div>
+      </motion.div>
 
       {/* Promo card */}
-      <div
-        className="w-full max-w-md rounded-xl border p-4 animate-fade-in-up stagger-4"
+      <motion.div
+        className="w-full max-w-md rounded-xl border p-4"
         style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.4, delay: 0.4, ease: "easeOut" }}
       >
         <div className="flex items-start gap-3">
           <div className="flex gap-1 pt-1">
@@ -182,7 +217,7 @@ export default function WelcomeScreen({ onSend, chatMode, onChatModeChange }: We
             </p>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

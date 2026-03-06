@@ -1,6 +1,16 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import type { Source } from "../types";
 import { BookIcon, ChevronDownIcon } from "./icons";
+
+const staggerContainer = {
+  animate: { transition: { staggerChildren: 0.06 } },
+};
+
+const fadeUp = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" as const } },
+};
 
 function isRAGSource(url: string): boolean {
   return url.startsWith("rag://");
@@ -41,10 +51,16 @@ export default function SourceCards({ sources, onSourceClick }: SourceCardsProps
   return (
     <div className="mb-3">
       {/* Horizontal scrollable row */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <motion.div
+        className="flex gap-2 overflow-x-auto pb-1"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
         {visible.map((src, i) => (
-          <button
+          <motion.button
             key={i}
+            variants={fadeUp}
             className="glass flex flex-shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-all hover:border-[var(--accent)] active:scale-[0.98]"
             style={{ maxWidth: 220 }}
             onClick={() => onSourceClick(src)}
@@ -70,12 +86,13 @@ export default function SourceCards({ sources, onSourceClick }: SourceCardsProps
                 {getDomain(src.url)}
               </div>
             </div>
-          </button>
+          </motion.button>
         ))}
 
         {/* +N more button */}
         {remaining > 0 && !showAll && (
-          <button
+          <motion.button
+            variants={fadeUp}
             className="glass flex flex-shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-xs transition-all hover:border-[var(--accent)]"
             style={{ color: "var(--text-secondary)" }}
             onClick={() => setShowAll(true)}
@@ -83,9 +100,9 @@ export default function SourceCards({ sources, onSourceClick }: SourceCardsProps
           >
             <span>+{remaining}</span>
             <ChevronDownIcon size={12} />
-          </button>
+          </motion.button>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

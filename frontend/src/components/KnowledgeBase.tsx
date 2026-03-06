@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import type { RAGDocument } from "../types";
 import { formatBytes, formatDate, getFileTypeLabel } from "../lib/format";
 import DocumentUpload from "./DocumentUpload";
@@ -172,7 +173,12 @@ export default function KnowledgeBase({
               No documents yet. Upload a file or paste text above.
             </p>
           ) : (
-            <div className="space-y-2">
+            <motion.div
+              className="space-y-2"
+              initial="initial"
+              animate="animate"
+              variants={{ animate: { transition: { staggerChildren: 0.05 } } }}
+            >
               <h3
                 className="text-[11px] font-semibold uppercase tracking-wider"
                 style={{ color: "var(--text-muted)" }}
@@ -189,8 +195,12 @@ export default function KnowledgeBase({
                 const preview = doc.chunks[0]?.content ?? "";
 
                 return (
-                  <div
+                  <motion.div
                     key={doc.prefix}
+                    variants={{
+                      initial: { opacity: 0, y: 10 },
+                      animate: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" as const } },
+                    }}
                     className="rounded-lg border transition-colors"
                     style={{ borderColor: "var(--border)" }}
                   >
@@ -305,10 +315,10 @@ export default function KnowledgeBase({
                         {confirmDelete === doc.prefix ? "Confirm?" : "Delete"}
                       </button>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
