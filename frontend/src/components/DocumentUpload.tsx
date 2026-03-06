@@ -118,7 +118,7 @@ export default function DocumentUpload({
         <div className="px-3 pt-2">
           <input
             type="text"
-            className="w-full border-none bg-transparent text-sm font-medium outline-none placeholder:text-[var(--text-muted)]"
+            className="w-full border-none bg-transparent text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/25 rounded-lg placeholder:text-[var(--text-muted)]"
             style={{ color: "var(--text)" }}
             placeholder="Document title..."
             value={textTitle}
@@ -127,7 +127,7 @@ export default function DocumentUpload({
         </div>
         <div className="px-3 py-1">
           <textarea
-            className="w-full resize-none border-none bg-transparent text-[13px] leading-relaxed outline-none placeholder:text-[var(--text-muted)]"
+            className="w-full resize-none border-none bg-transparent text-[13px] leading-relaxed outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/25 rounded-lg placeholder:text-[var(--text-muted)]"
             style={{ color: "var(--text)", minHeight: 80, maxHeight: 200 }}
             placeholder="Paste text content here..."
             value={textContent}
@@ -147,8 +147,15 @@ export default function DocumentUpload({
             onClick={handleTextSubmit}
             disabled={isIngesting || !textContent.trim()}
           >
-            <FileIcon size={13} />
-            Ingest
+            {isIngesting ? (
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <FileIcon size={13} />
+            )}
+            {isIngesting ? "Saving..." : "Ingest"}
           </button>
         </div>
       </div>

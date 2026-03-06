@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ChatMode, ThemeMode } from "../types";
 import type { AuthMode } from "../hooks/useAuth";
 import type { SearchSettings, PresetName } from "../lib/searchSettings";
@@ -46,11 +46,18 @@ export default function SettingsModal({
   const [keyInput, setKeyInput] = useState(apiKey);
   const [activeTab, setActiveTab] = useState<Tab>("general");
   const [keyValid, setKeyValid] = useState<boolean | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trapRef = useFocusTrap(open);
 
   const handleSave = useCallback(() => {
-    onSaveApiKey(keyInput || "changeme");
-    onClose();
+    setIsSaving(true);
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      onSaveApiKey(keyInput || "changeme");
+      setIsSaving(false);
+      onClose();
+    }, 400);
   }, [keyInput, onSaveApiKey, onClose]);
 
   const handleKeyBlur = useCallback(() => {
@@ -86,7 +93,7 @@ export default function SettingsModal({
     >
       <div
         ref={trapRef}
-        className="w-[480px] max-w-[calc(100vw-32px)] rounded-2xl border p-0 shadow-lg animate-scale-in"
+        className="w-[480px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-64px)] flex flex-col rounded-2xl border p-0 shadow-lg animate-scale-in"
         style={{ background: "var(--surface)", borderColor: "var(--border)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -130,7 +137,7 @@ export default function SettingsModal({
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto min-h-0 flex-1">
           {activeTab === "general" && (
             <div className="animate-fade-in">
               {isJwtAuth ? (
@@ -180,7 +187,7 @@ export default function SettingsModal({
                   <div className="relative">
                     <input
                       type="password"
-                      className="w-full rounded-xl border px-3 py-2.5 pr-10 font-mono text-sm outline-none transition-colors focus:border-[var(--accent)]"
+                      className="w-full rounded-xl border px-3 py-2.5 pr-10 font-mono text-sm outline-none transition-all focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
                       style={{
                         background: "var(--surface-2)",
                         borderColor: keyValid === false ? "#ef4444" : keyValid === true ? "#22c55e" : "var(--border)",
@@ -311,11 +318,18 @@ export default function SettingsModal({
           </button>
           {!isJwtAuth && (
             <button
-              className="rounded-xl px-5 py-2 text-sm font-medium transition-all hover:opacity-90 active:scale-[0.98]"
+              className="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-medium transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
               style={{ background: "var(--accent)", color: "var(--bg)" }}
               onClick={handleSave}
+              disabled={isSaving}
             >
-              Save
+              {isSaving && (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {isSaving ? "Saving..." : "Save"}
             </button>
           )}
         </div>

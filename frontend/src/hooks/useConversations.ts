@@ -1,20 +1,35 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Conversation, Message } from "../types";
 import { getItem, setItem } from "../lib/storage";
 
 const MAX_CONVERSATIONS = 50;
 
-export function useConversations() {
+function storageKey(userId: string | null): string {
+  return userId ? `conversations_${userId}` : "conversations";
+}
+
+export function useConversations(userId: string | null = null) {
+  const userIdRef = useRef(userId);
   const [conversations, setConversations] = useState<Conversation[]>(() =>
-    getItem<Conversation[]>("conversations", []),
+    getItem<Conversation[]>(storageKey(userId), []),
   );
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
+  // Reload conversations when userId changes (login/logout/switch user)
+  useEffect(() => {
+    if (userIdRef.current === userId) return;
+    userIdRef.current = userId;
+    const loaded = getItem<Conversation[]>(storageKey(userId), []);
+    setConversations(loaded);
+    setCurrentConvId(null);
+    setMessages([]);
+  }, [userId]);
+
   const persist = useCallback((convs: Conversation[]) => {
-    setItem("conversations", convs.slice(0, MAX_CONVERSATIONS));
+    setItem(storageKey(userIdRef.current), convs.slice(0, MAX_CONVERSATIONS));
   }, []);
 
   const pendingProjectIdRef = useRef<string | null>(null);

@@ -45,9 +45,11 @@ export async function register(
   });
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
-    throw new Error(
-      extractError(data.detail, `Registration failed: ${resp.status}`),
-    );
+    const fallback =
+      resp.status === 404 || resp.status === 405
+        ? "Registration is not available. Please check server configuration."
+        : `Registration failed (${resp.status})`;
+    throw new Error(extractError(data.detail, fallback));
   }
   return resp.json();
 }

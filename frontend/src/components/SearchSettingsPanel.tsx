@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatMode } from "../types";
 import type { SearchSettings, PresetName, ParamMeta } from "../lib/searchSettings";
 import { PARAM_META } from "../lib/searchSettings";
@@ -35,10 +35,24 @@ export default function SearchSettingsPanel({
   getActivePreset,
 }: SearchSettingsPanelProps) {
   const [editMode, setEditMode] = useState<ChatMode>(chatMode);
+  const [showSaved, setShowSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const isFirstRender = useRef(true);
   const activePreset = getActivePreset(editMode);
   const modeSettings = settings[editMode];
   const meta = PARAM_META[editMode] as Record<string, ParamMeta>;
   const paramKeys = Object.keys(meta);
+
+  // Flash "saved" indicator when settings change (skip initial render)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setShowSaved(true);
+    clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setShowSaved(false), 1500);
+  }, [settings]);
 
   return (
     <div className="animate-fade-in">
@@ -92,14 +106,25 @@ export default function SearchSettingsPanel({
         ))}
       </div>
 
-      {/* Reset link */}
-      <button
-        className="mt-4 text-[12px] font-medium transition-colors hover:underline"
-        style={{ color: "var(--text-muted)" }}
-        onClick={() => onReset(editMode)}
-      >
-        Reset to defaults
-      </button>
+      {/* Footer: reset + auto-save indicator */}
+      <div className="mt-4 flex items-center justify-between">
+        <button
+          className="text-[12px] font-medium transition-colors hover:underline"
+          style={{ color: "var(--text-muted)" }}
+          onClick={() => onReset(editMode)}
+        >
+          Reset to defaults
+        </button>
+        <span
+          className="text-[11px] transition-opacity duration-300"
+          style={{
+            color: "var(--text-muted)",
+            opacity: showSaved ? 1 : 0,
+          }}
+        >
+          Saved
+        </span>
+      </div>
     </div>
   );
 }

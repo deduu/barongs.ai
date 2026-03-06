@@ -58,7 +58,7 @@ export default function ChatInput({
           <div className="px-4 pt-3 pb-2">
             <textarea
               ref={textareaRef}
-              className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-[var(--text-muted)]"
+              className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/25 rounded-xl placeholder:text-[var(--text-muted)]"
               style={{ color: "var(--text)", minHeight: 44, maxHeight: 200, fontFamily: "inherit" }}
               placeholder={
                 chatMode === "rag"

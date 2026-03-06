@@ -6,10 +6,22 @@ import { getItem, setItem } from "../lib/storage";
 
 const STORAGE_KEY = "search_settings";
 
+/** Merge stored settings with defaults so new fields get default values. */
+function migrateSettings(stored: SearchSettings): SearchSettings {
+  return {
+    search: { ...DEFAULT_SETTINGS.search, ...stored.search },
+    deep_search: { ...DEFAULT_SETTINGS.deep_search, ...stored.deep_search },
+    rag: { ...DEFAULT_SETTINGS.rag, ...stored.rag },
+  };
+}
+
 export function useSearchSettings() {
-  const [settings, setSettings] = useState<SearchSettings>(() =>
-    getItem<SearchSettings>(STORAGE_KEY, DEFAULT_SETTINGS),
-  );
+  const [settings, setSettings] = useState<SearchSettings>(() => {
+    const stored = getItem<SearchSettings>(STORAGE_KEY, DEFAULT_SETTINGS);
+    const merged = migrateSettings(stored);
+    setItem(STORAGE_KEY, merged);
+    return merged;
+  });
 
   const updateModeSettings = useCallback(
     <M extends ChatMode>(mode: M, partial: Partial<SearchSettings[M]>) => {
