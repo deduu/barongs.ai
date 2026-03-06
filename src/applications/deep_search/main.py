@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
+from dataclasses import dataclass
+from typing import Any
 
 from fastapi import FastAPI
+from fastapi.routing import APIRouter
 
 from src.applications.deep_search.agents.academic_researcher import AcademicResearcherAgent
 from src.applications.deep_search.agents.data_analyst import DataAnalystAgent
@@ -35,8 +38,25 @@ from src.core.tools.web.duckduckgo_search import DuckDuckGoSearchTool
 logger = logging.getLogger(__name__)
 
 
-def create_deep_search_app(settings: DeepSearchSettings | None = None) -> FastAPI:
-    """Composition root: wire tools, agents, orchestrator, pipeline, and routes."""
+@dataclass
+class DeepSearchWiring:
+    """Result of wiring deep search dependencies."""
+
+    router: APIRouter
+    startup_hooks: list[Callable[[], Awaitable[None]]]
+    shutdown_hooks: list[Callable[[], Awaitable[None]]]
+
+
+def wire_deep_search(
+    settings: DeepSearchSettings | None = None,
+    *,
+    auth_dependency: Callable[..., Coroutine[Any, Any, Any]] | None = None,
+) -> DeepSearchWiring:
+    """Wire deep search dependencies and return a router + lifecycle hooks.
+
+    This is the reusable composition root. Both the standalone app and the
+    gateway use this to avoid duplicating wiring logic.
+    """
     settings = settings or DeepSearchSettings()
 
     startup_hooks: list[Callable[[], Awaitable[None]]] = []
@@ -165,15 +185,35 @@ def create_deep_search_app(settings: DeepSearchSettings | None = None) -> FastAP
         llm_provider=llm,
         model=settings.llm_model,
         session_store=session_store,
+        timeout_seconds=settings.agent_timeout_seconds,
     )
-
-    # --- FastAPI App ---
-    fastapi_app = create_app(settings, on_startup=startup_hooks, on_shutdown=shutdown_hooks)
 
     router = create_router(
-        orchestrator, settings, pipeline=pipeline, session_store=session_store,
+        orchestrator,
+        settings,
+        pipeline=pipeline,
+        session_store=session_store,
+        auth_dependency=auth_dependency,
     )
-    fastapi_app.include_router(router)
+
+    return DeepSearchWiring(
+        router=router,
+        startup_hooks=startup_hooks,
+        shutdown_hooks=shutdown_hooks,
+    )
+
+
+def create_deep_search_app(settings: DeepSearchSettings | None = None) -> FastAPI:
+    """Standalone composition root for running deep search as its own service."""
+    settings = settings or DeepSearchSettings()
+    wiring = wire_deep_search(settings)
+
+    fastapi_app = create_app(
+        settings,
+        on_startup=wiring.startup_hooks,
+        on_shutdown=wiring.shutdown_hooks,
+    )
+    fastapi_app.include_router(wiring.router)
 
     return fastapi_app
 

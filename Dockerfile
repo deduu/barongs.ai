@@ -32,7 +32,7 @@ USER barongsai
 EXPOSE 8000
 
 # Tunable via environment
-ENV BGS_APP_MODULE=src.applications.search_agent.main:app
+ENV BGS_APP_MODULE=src.main:app
 ENV BGS_WORKERS=2
 ENV BGS_GRACEFUL_TIMEOUT=30
 ENV BGS_MAX_REQUESTS=10000
