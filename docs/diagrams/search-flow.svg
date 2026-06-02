@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2200 1350" width="2200" height="1350" role="img" aria-labelledby="title desc">
+  <title id="title">Search Mode Flow</title>
+  <desc id="desc">Zoomable diagram of the current frontend search flow and the backend non-streaming variation.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8f5ef; }
+      .title { font: 700 42px 'Segoe UI', Arial, sans-serif; fill: #1d2a35; }
+      .subtitle { font: 400 22px 'Segoe UI', Arial, sans-serif; fill: #4d5a66; }
+      .lane { fill: #ede6d7; stroke: #c9bda6; stroke-width: 2; }
+      .lane-text { font: 700 20px 'Segoe UI', Arial, sans-serif; fill: #5d4f37; letter-spacing: 1px; }
+      .box { fill: #ffffff; stroke: #1d2a35; stroke-width: 3; rx: 24; ry: 24; }
+      .box-blue { fill: #dff2ff; }
+      .box-green { fill: #e2f6e8; }
+      .box-amber { fill: #fff1cf; }
+      .box-rose { fill: #ffe0df; }
+      .box-ink { fill: #edf0ff; }
+      .box-note { fill: #f4f0ff; stroke: #5845a3; stroke-width: 3; rx: 24; ry: 24; }
+      .group { fill: none; stroke: #6e7f8d; stroke-width: 3; stroke-dasharray: 14 10; rx: 24; ry: 24; }
+      .label { font: 700 26px 'Segoe UI', Arial, sans-serif; fill: #17212b; }
+      .body { font: 400 22px 'Segoe UI', Arial, sans-serif; fill: #23313d; }
+      .small { font: 400 19px 'Segoe UI', Arial, sans-serif; fill: #425262; }
+      .mono { font: 700 20px Consolas, 'Courier New', monospace; fill: #243240; }
+      .center { text-anchor: middle; }
+      .arrow { stroke: #1d2a35; stroke-width: 5; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #455766; stroke-width: 4; fill: none; marker-end: url(#arrowSoft); }
+      .divider { stroke: #d7cfbf; stroke-width: 2; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1d2a35" />
+    </marker>
+    <marker id="arrowSoft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#455766" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="2200" height="1350" />
+
+  <text class="title" x="90" y="80">Search Mode Flow</text>
+  <text class="subtitle" x="90" y="118">Actual frontend Enter path: streaming SSE route. Query analysis exists in the backend, but the current UI does not use it.</text>
+
+  <rect class="lane" x="70" y="165" width="2060" height="80" rx="18" ry="18" />
+  <text class="lane-text" x="100" y="215">CURRENT FRONTEND STREAM PATH</text>
+
+  <rect class="box box-amber" x="90" y="300" width="260" height="150" />
+  <text class="label" x="220" y="355" text-anchor="middle">1. User Action</text>
+  <text class="body center" x="220" y="395">Type query</text>
+  <text class="body center" x="220" y="425">and press Enter</text>
+
+  <rect class="box box-blue" x="410" y="300" width="330" height="150" />
+  <text class="label center" x="575" y="352">2. Frontend</text>
+  <text class="mono center" x="575" y="392">streamSearch()</text>
+  <text class="body center" x="575" y="424">chooses</text>
+  <text class="mono center" x="575" y="452">POST /api/search/stream</text>
+
+  <rect class="box box-ink" x="800" y="300" width="370" height="150" />
+  <text class="label center" x="985" y="352">3. Search Stream Route</text>
+  <text class="mono center" x="985" y="390">search_stream()</text>
+  <text class="body center" x="985" y="422">starts SSE status updates</text>
+  <text class="small center" x="985" y="452">"Searching", "Reading sources", "Writing answer"</text>
+
+  <rect class="box box-green" x="1230" y="300" width="400" height="150" />
+  <text class="label center" x="1430" y="352">4. StreamableSearchPipeline</text>
+  <text class="mono center" x="1430" y="390">research(context)</text>
+  <text class="body center" x="1430" y="422">runs a single-agent orchestrator</text>
+  <text class="small center" x="1430" y="452">with WebResearcherAgent</text>
+
+  <rect class="box box-rose" x="1690" y="260" width="430" height="480" />
+  <text class="label center" x="1905" y="315">5. WebResearcherAgent</text>
+  <text class="body center" x="1905" y="350">Current UI path uses the original query directly</text>
+  <text class="small center" x="1905" y="380">No QueryAnalyzerAgent in this stream path</text>
+
+  <rect class="box" x="1730" y="420" width="160" height="84" />
+  <text class="body center" x="1810" y="470">Search tool</text>
+
+  <rect class="box" x="1920" y="420" width="160" height="84" />
+  <text class="body center" x="2000" y="458">Validate +</text>
+  <text class="body center" x="2000" y="485">dedupe URLs</text>
+
+  <rect class="group" x="1730" y="540" width="350" height="165" />
+  <text class="small" x="1752" y="570">Parallel content fetches for top URLs</text>
+  <rect class="box" x="1750" y="590" width="90" height="68" />
+  <rect class="box" x="1860" y="590" width="90" height="68" />
+  <rect class="box" x="1970" y="590" width="90" height="68" />
+  <text class="body center" x="1795" y="631">URL 1</text>
+  <text class="body center" x="1905" y="631">URL 2</text>
+  <text class="body center" x="2015" y="631">URL N</text>
+
+  <rect class="box box-blue" x="880" y="830" width="430" height="165" />
+  <text class="label center" x="1095" y="885">6. SSE Source Events</text>
+  <text class="body center" x="1095" y="925">Route emits source cards to the UI</text>
+  <text class="small center" x="1095" y="957">before final answer generation finishes</text>
+
+  <rect class="box box-green" x="1380" y="830" width="430" height="165" />
+  <text class="label center" x="1595" y="880">7. SynthesizerAgent</text>
+  <text class="mono center" x="1595" y="920">stream_synthesize(query, sources)</text>
+  <text class="body center" x="1595" y="952">LLM writes the cited answer</text>
+
+  <rect class="box box-amber" x="1880" y="830" width="240" height="165" />
+  <text class="label center" x="2000" y="885">8. UI Render</text>
+  <text class="body center" x="2000" y="923">token chunks</text>
+  <text class="body center" x="2000" y="953">become the final answer</text>
+
+  <path class="arrow" d="M 350 375 L 410 375" />
+  <path class="arrow" d="M 740 375 L 800 375" />
+  <path class="arrow" d="M 1170 375 L 1230 375" />
+  <path class="arrow" d="M 1630 375 L 1690 375" />
+  <path class="arrow" d="M 1810 504 L 1920 504" />
+  <path class="arrow-soft" d="M 2000 504 L 2000 540" />
+  <path class="arrow" d="M 1850 740 L 1160 830" />
+  <path class="arrow" d="M 1310 912 L 1380 912" />
+  <path class="arrow" d="M 1810 912 L 1880 912" />
+
+  <line class="divider" x1="70" y1="1060" x2="2130" y2="1060" />
+
+  <rect class="lane" x="70" y="1088" width="2060" height="80" rx="18" ry="18" />
+  <text class="lane-text" x="100" y="1138">BACKEND NON-STREAMING VARIATION</text>
+
+  <rect class="box-note" x="90" y="1195" width="2020" height="110" />
+  <text class="label" x="125" y="1245">If you call the plain</text>
+  <text class="mono" x="370" y="1245">/api/search</text>
+  <text class="label" x="520" y="1245">endpoint instead, the orchestration is:</text>
+  <text class="mono" x="125" y="1288">QueryAnalyzerAgent -&gt; DirectAnswererAgent OR SearchPathAgent -&gt; WebResearcherAgent -&gt; SynthesizerAgent</text>
+</svg>

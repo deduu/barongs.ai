@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2600 1700" width="2600" height="1700" role="img" aria-labelledby="title desc">
+  <title id="title">Deep Search Flow</title>
+  <desc id="desc">Zoomable diagram of the streaming deep search pipeline, including planning, DAG execution, validation, reflection, and synthesis.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f4ee; }
+      .title { font: 700 44px 'Segoe UI', Arial, sans-serif; fill: #1e2733; }
+      .subtitle { font: 400 22px 'Segoe UI', Arial, sans-serif; fill: #566471; }
+      .lane { fill: #ede6d7; stroke: #c9bda6; stroke-width: 2; }
+      .lane-text { font: 700 20px 'Segoe UI', Arial, sans-serif; fill: #5d4f37; letter-spacing: 1px; }
+      .box { fill: #ffffff; stroke: #1e2733; stroke-width: 3; rx: 24; ry: 24; }
+      .blue { fill: #dff2ff; }
+      .green { fill: #e2f6e8; }
+      .amber { fill: #fff1cf; }
+      .rose { fill: #ffe0df; }
+      .ink { fill: #edf0ff; }
+      .note { fill: #f5f1ff; stroke: #5f49b1; stroke-width: 3; rx: 24; ry: 24; }
+      .group { fill: none; stroke: #6f7d8a; stroke-width: 3; stroke-dasharray: 15 10; rx: 28; ry: 28; }
+      .label { font: 700 28px 'Segoe UI', Arial, sans-serif; fill: #17212b; }
+      .body { font: 400 22px 'Segoe UI', Arial, sans-serif; fill: #24313d; }
+      .small { font: 400 19px 'Segoe UI', Arial, sans-serif; fill: #42515f; }
+      .mono { font: 700 20px Consolas, 'Courier New', monospace; fill: #243240; }
+      .center { text-anchor: middle; }
+      .arrow { stroke: #1e2733; stroke-width: 5; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #455766; stroke-width: 4; fill: none; marker-end: url(#arrowSoft); }
+      .loop { stroke: #5f49b1; stroke-width: 5; fill: none; marker-end: url(#arrowLoop); }
+      .divider { stroke: #d7cfbf; stroke-width: 2; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1e2733" />
+    </marker>
+    <marker id="arrowSoft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#455766" />
+    </marker>
+    <marker id="arrowLoop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5f49b1" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="2600" height="1700" />
+
+  <text class="title" x="90" y="82">Deep Search Flow</text>
+  <text class="subtitle" x="90" y="120">Current frontend Enter path: stream to the deep-search pipeline, build a research DAG, execute wave by wave, then synthesize a report.</text>
+
+  <rect class="lane" x="70" y="165" width="2460" height="80" rx="18" ry="18" />
+  <text class="lane-text" x="100" y="215">CURRENT FRONTEND STREAM PATH</text>
+
+  <rect class="box amber" x="90" y="300" width="250" height="145" />
+  <text class="label center" x="215" y="355">1. User Action</text>
+  <text class="body center" x="215" y="395">Type query</text>
+  <text class="body center" x="215" y="425">and press Enter</text>
+
+  <rect class="box blue" x="390" y="300" width="360" height="145" />
+  <text class="label center" x="570" y="350">2. Frontend</text>
+  <text class="mono center" x="570" y="390">streamSearch()</text>
+  <text class="body center" x="570" y="422">chooses</text>
+  <text class="mono center" x="570" y="450">POST /api/deep-search/stream</text>
+
+  <rect class="box ink" x="810" y="300" width="420" height="145" />
+  <text class="label center" x="1020" y="350">3. Deep Search Route</text>
+  <text class="mono center" x="1020" y="390">deep_search_stream()</text>
+  <text class="body center" x="1020" y="422">opens SSE and delegates to</text>
+  <text class="mono center" x="1020" y="450">StreamableDeepSearchPipeline</text>
+
+  <rect class="box green" x="1290" y="280" width="1180" height="1210" />
+  <text class="label" x="1330" y="335">4. StreamableDeepSearchPipeline</text>
+  <text class="small" x="1330" y="368">This is the main user-visible orchestration path.</text>
+
+  <rect class="box blue" x="1340" y="410" width="480" height="170" />
+  <text class="label center" x="1580" y="465">Phase 0: Ground the entity</text>
+  <text class="body center" x="1580" y="503">extract URLs from the prompt</text>
+  <text class="body center" x="1580" y="533">optionally fetch primary sources</text>
+  <text class="body center" x="1580" y="563">build entity grounding metadata</text>
+
+  <rect class="box rose" x="1870" y="410" width="540" height="170" />
+  <text class="label center" x="2140" y="465">Optional disambiguation</text>
+  <text class="body center" x="2140" y="503">If the entity is ambiguous:</text>
+  <text class="body center" x="2140" y="533">pause, ask the user, resume with clarification</text>
+  <text class="small center" x="2140" y="563">This happens before planning starts.</text>
+
+  <rect class="box amber" x="1340" y="650" width="480" height="170" />
+  <text class="label center" x="1580" y="705">Phase 1: Planner</text>
+  <text class="mono center" x="1580" y="745">ResearchPlannerAgent</text>
+  <text class="body center" x="1580" y="777">creates a DAG of research tasks</text>
+  <text class="small center" x="1580" y="807">web, academic, code, fact-check, reflection</text>
+
+  <rect class="box note" x="1870" y="650" width="540" height="170" />
+  <text class="label center" x="2140" y="705">Planner post-processing</text>
+  <text class="body center" x="2140" y="745">If academic search is enabled and missing,</text>
+  <text class="body center" x="2140" y="775">the pipeline injects an academic task.</text>
+  <text class="small center" x="2140" y="807">Interactive outline approval can also pause here.</text>
+
+  <rect class="group" x="1340" y="900" width="1070" height="470" />
+  <text class="label" x="1370" y="950">Phase 2: ResearchDAGStrategy</text>
+  <text class="small" x="1370" y="982">Ready tasks in the same wave run concurrently. Dependent tasks wait for earlier findings.</text>
+
+  <rect class="box blue" x="1380" y="1020" width="290" height="120" />
+  <text class="label center" x="1525" y="1067">deep_web_</text>
+  <text class="label center" x="1525" y="1098">researcher</text>
+
+  <rect class="box green" x="1730" y="1020" width="290" height="120" />
+  <text class="label center" x="1875" y="1067">academic_</text>
+  <text class="label center" x="1875" y="1098">researcher</text>
+
+  <rect class="box amber" x="2080" y="1020" width="290" height="120" />
+  <text class="label center" x="2225" y="1067">data_</text>
+  <text class="label center" x="2225" y="1098">analyst</text>
+
+  <rect class="box rose" x="1555" y="1195" width="290" height="120" />
+  <text class="label center" x="1700" y="1240">fact_</text>
+  <text class="label center" x="1700" y="1273">checker</text>
+
+  <rect class="box note" x="1915" y="1195" width="290" height="120" />
+  <text class="label center" x="2060" y="1240">reflection</text>
+  <text class="body center" x="2060" y="1276">gaps + new tasks</text>
+
+  <text class="small center" x="1525" y="1167">search -&gt; crawl -&gt; score -&gt; extract</text>
+  <text class="small center" x="1875" y="1167">search papers -&gt; score -&gt; extract</text>
+  <text class="small center" x="2225" y="1167">optional quantitative/code step</text>
+
+  <rect class="box green" x="1340" y="1420" width="480" height="170" />
+  <text class="label center" x="1580" y="1475">Phase 3: Synthesizer</text>
+  <text class="mono center" x="1580" y="1515">DeepSynthesizerAgent</text>
+  <text class="body center" x="1580" y="1547">streams the final report token by token</text>
+
+  <rect class="box amber" x="1870" y="1420" width="540" height="170" />
+  <text class="label center" x="2140" y="1475">Frontend render</text>
+  <text class="body center" x="2140" y="1515">SSE status, findings, and answer chunks</text>
+  <text class="body center" x="2140" y="1547">become the visible deep-search report</text>
+
+  <path class="arrow" d="M 340 372 L 390 372" />
+  <path class="arrow" d="M 750 372 L 810 372" />
+  <path class="arrow" d="M 1230 372 L 1290 372" />
+
+  <path class="arrow-soft" d="M 1580 580 L 1580 650" />
+  <path class="arrow-soft" d="M 2140 580 L 2140 650" />
+  <path class="arrow-soft" d="M 1580 820 L 1580 900" />
+  <path class="arrow-soft" d="M 2140 820 L 2140 900" />
+
+  <path class="arrow" d="M 1525 1140 L 1700 1195" />
+  <path class="arrow" d="M 1875 1140 L 1700 1195" />
+  <path class="arrow" d="M 1700 1315 L 1580 1420" />
+  <path class="arrow" d="M 1820 1505 L 1870 1505" />
+
+  <path class="arrow-soft" d="M 2060 1140 L 2060 1195" />
+  <path class="loop" d="M 2205 1255 C 2350 1255, 2375 1090, 2285 980 C 2200 875, 1835 875, 1740 930" />
+
+  <text class="small" x="2230" y="1238">If reflection returns</text>
+  <text class="small" x="2230" y="1262">new_tasks, the DAG adds them</text>
+  <text class="small" x="2230" y="1286">and runs another iteration</text>
+  <text class="small" x="2230" y="1310">until max_iterations is reached.</text>
+
+  <line class="divider" x1="70" y1="1628" x2="2530" y2="1628" />
+</svg>
