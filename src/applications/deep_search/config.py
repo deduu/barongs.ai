@@ -48,5 +48,9 @@ class DeepSearchSettings(AppSettings):
     research_max_api_calls: int = 50
     research_max_time_seconds: int = 300
 
+    # Academic content extraction
+    academic_content_max_length: int = 15000
+    academic_extract_max_tokens: int = 1200
+
     # Streaming admission control
     stream_max_concurrent_requests: int = 100

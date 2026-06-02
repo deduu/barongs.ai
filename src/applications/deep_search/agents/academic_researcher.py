@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 _NOT_RELEVANT_SENTINEL = "NOT_RELEVANT"
 
 
+_TRUSTED_ACADEMIC_SOURCES = frozenset({"arxiv", "semantic_scholar"})
+
+
 class AcademicResearcherAgent(Agent):
     """Searches academic papers and extracts findings with credibility scores."""
 
@@ -32,11 +35,15 @@ class AcademicResearcherAgent(Agent):
         academic_search_tool: Tool,
         source_scorer_tool: Tool,
         model: str = "gpt-4o",
+        content_fetcher_tool: Tool | None = None,
+        extract_max_tokens: int = 1200,
     ) -> None:
         self._llm = llm_provider
         self._academic_tool = academic_search_tool
         self._scorer_tool = source_scorer_tool
         self._model = model
+        self._content_fetcher = content_fetcher_tool
+        self._extract_max_tokens = extract_max_tokens
 
     @property
     def name(self) -> str:
@@ -45,6 +52,25 @@ class AcademicResearcherAgent(Agent):
     @property
     def description(self) -> str:
         return "Searches academic papers and extracts findings."
+
+    async def _fetch_paper_content(self, url: str) -> str:
+        """Attempt to fetch richer content from the paper URL."""
+        if not self._content_fetcher or not url:
+            return ""
+        try:
+            result = await self._content_fetcher.execute(
+                ToolInput(
+                    tool_name=self._content_fetcher.name,
+                    parameters={"url": url},
+                )
+            )
+            if result.success and isinstance(result.output, str):
+                return result.output
+            if result.success and isinstance(result.output, dict):
+                return result.output.get("content", "")
+        except Exception:
+            logger.debug("Failed to fetch paper content: %s", url)
+        return ""
 
     async def run(self, context: AgentContext) -> AgentResult:
         query = context.user_message
@@ -110,6 +136,17 @@ class AcademicResearcherAgent(Agent):
 
             credibility = score_result.output if score_result.success else {}
 
+            # Fetch richer content from paper URL if possible
+            abstract = paper.get("abstract", "")
+            fetched_content = await self._fetch_paper_content(paper.get("url", ""))
+            # Use fetched content when substantially richer than abstract
+            if fetched_content and len(fetched_content) > len(abstract) * 1.5:
+                paper_text = fetched_content[:6000]
+                text_label = "Content"
+            else:
+                paper_text = abstract[:6000]
+                text_label = "Abstract"
+
             # Extract finding via LLM (with entity grounding)
             entity_instruction = ""
             if entity_name:
@@ -128,7 +165,7 @@ class AcademicResearcherAgent(Agent):
                             role="user",
                             content=f"Extract key findings from this paper relevant to: {query}\n\n"
                             f"Title: {paper.get('title', '')}\n"
-                            f"Abstract: {paper.get('abstract', '')[:3000]}"
+                            f"{text_label}: {paper_text}"
                             f"{entity_instruction}",
                         )
                     ],
@@ -143,7 +180,7 @@ class AcademicResearcherAgent(Agent):
                         f"{_NOT_RELEVANT_SENTINEL}"
                     ),
                     temperature=0.2,
-                    max_tokens=800,
+                    max_tokens=self._extract_max_tokens,
                 )
                 response = await self._llm.generate(request)
 
@@ -163,7 +200,14 @@ class AcademicResearcherAgent(Agent):
                         paper.get("title", ""),
                         paper.get("abstract", ""),
                     )
-                    if not likely_relevant or not supported_by_focus:
+                    is_trusted = paper.get("source") in _TRUSTED_ACADEMIC_SOURCES
+                    # Relaxed filtering for trusted academic sources:
+                    # accept if EITHER heuristic passes (OR), not both (AND)
+                    if is_trusted:
+                        passes_filter = likely_relevant or supported_by_focus
+                    else:
+                        passes_filter = likely_relevant and supported_by_focus
+                    if not passes_filter:
                         logger.debug("Filtered irrelevant academic finding: %s", paper.get("title"))
                         source_record["status"] = "filtered_irrelevant"
                         continue
@@ -176,7 +220,7 @@ class AcademicResearcherAgent(Agent):
                                     f"The source explicitly mentions {entity_name}. "
                                     f"Extract only source-supported details relevant to: {query}\n\n"
                                     f"Title: {paper.get('title', '')}\n"
-                                    f"Abstract: {paper.get('abstract', '')[:3000]}"
+                                    f"{text_label}: {paper_text}"
                                 ),
                             )
                         ],
@@ -187,7 +231,7 @@ class AcademicResearcherAgent(Agent):
                             "Return NOT_RELEVANT only if the source clearly names a different entity."
                         ),
                         temperature=0.1,
-                        max_tokens=500,
+                        max_tokens=max(500, self._extract_max_tokens - 400),
                     )
                     retry_response = await self._llm.generate(retry_request)
                     if _NOT_RELEVANT_SENTINEL in retry_response.content.upper():

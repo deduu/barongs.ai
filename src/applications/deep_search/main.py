@@ -123,6 +123,10 @@ def wire_deep_search(
     )
     source_scorer = SourceScorerTool()
     content_fetcher = ContentFetcherTool(http_client=http_pool)
+    academic_content_fetcher = ContentFetcherTool(
+        http_client=http_pool,
+        max_content_length=settings.academic_content_max_length,
+    )
 
     # --- Agents ---
     planner = ResearchPlannerAgent(llm_provider=llm, model=settings.llm_model)
@@ -131,6 +135,8 @@ def wire_deep_search(
         academic_search_tool=academic_search,
         source_scorer_tool=source_scorer,
         model=settings.llm_model,
+        content_fetcher_tool=academic_content_fetcher,
+        extract_max_tokens=settings.academic_extract_max_tokens,
     )
     deep_web_researcher = DeepWebResearcherAgent(
         llm_provider=llm,

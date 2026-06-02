@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import AsyncIterator
-import re
 from typing import Any
 
 from src.applications.deep_search.models.research_mode import ResearchMode
@@ -41,7 +41,7 @@ class DeepSynthesizerAgent(Agent):
             parts.append(
                 f"[{f.get('finding_id', 'unknown')}] (confidence: {f.get('confidence', 'N/A')})\n"
                 f"Source: {f.get('source_url', 'unknown')}\n"
-                f"Content: {f.get('content', '')[:4000]}\n"
+                f"Content: {f.get('content', '')[:6000]}\n"
             )
         return "\n".join(parts)
 

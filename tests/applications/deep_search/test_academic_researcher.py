@@ -92,6 +92,104 @@ class TestAcademicResearcherAgent:
 
         assert result.metadata["findings"] == []
 
+    async def test_uses_fetched_content_when_richer_than_abstract(self):
+        academic_tool = AsyncMock()
+        academic_tool.name = "academic_search"
+        academic_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="academic_search",
+            output=[
+                {
+                    "title": "Deep RL for Robotics",
+                    "url": "https://arxiv.org/abs/2",
+                    "abstract": "Short abstract.",
+                    "authors": ["J. Doe"],
+                    "year": 2024,
+                    "citation_count": 10,
+                    "source": "arxiv",
+                },
+            ],
+        ))
+
+        scorer_tool = AsyncMock()
+        scorer_tool.name = "source_scorer"
+        scorer_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="source_scorer",
+            output={"overall_score": 0.8},
+        ))
+
+        fetcher_tool = AsyncMock()
+        fetcher_tool.name = "content_fetcher"
+        fetched_body = "A" * 500  # much longer than the short abstract
+        fetcher_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="content_fetcher",
+            output=fetched_body,
+        ))
+
+        llm = AsyncMock()
+        llm.generate = AsyncMock(return_value=LLMResponse(
+            content="Detailed findings from full paper content.",
+            model="test", usage={"total_tokens": 80},
+        ))
+
+        agent = AcademicResearcherAgent(
+            llm_provider=llm,
+            academic_search_tool=academic_tool,
+            source_scorer_tool=scorer_tool,
+            content_fetcher_tool=fetcher_tool,
+        )
+        context = AgentContext(user_message="deep RL robotics")
+        result = await agent.run(context)
+
+        assert len(result.metadata["findings"]) == 1
+        fetcher_tool.execute.assert_called_once()
+        # LLM prompt should contain "Content:" (fetched), not "Abstract:"
+        llm_call_content = llm.generate.call_args.args[0].messages[0].content
+        assert "Content:" in llm_call_content
+
+    async def test_falls_back_to_abstract_without_fetcher(self):
+        academic_tool = AsyncMock()
+        academic_tool.name = "academic_search"
+        academic_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="academic_search",
+            output=[
+                {
+                    "title": "Fallback Test",
+                    "url": "https://arxiv.org/abs/3",
+                    "abstract": "This is the abstract content for testing.",
+                    "authors": ["A. Test"],
+                    "year": 2024,
+                    "citation_count": 1,
+                    "source": "arxiv",
+                },
+            ],
+        ))
+
+        scorer_tool = AsyncMock()
+        scorer_tool.name = "source_scorer"
+        scorer_tool.execute = AsyncMock(return_value=ToolResult(
+            tool_name="source_scorer",
+            output={"overall_score": 0.6},
+        ))
+
+        llm = AsyncMock()
+        llm.generate = AsyncMock(return_value=LLMResponse(
+            content="Finding from abstract.",
+            model="test", usage={"total_tokens": 30},
+        ))
+
+        agent = AcademicResearcherAgent(
+            llm_provider=llm,
+            academic_search_tool=academic_tool,
+            source_scorer_tool=scorer_tool,
+            # no content_fetcher_tool
+        )
+        context = AgentContext(user_message="fallback test")
+        result = await agent.run(context)
+
+        assert len(result.metadata["findings"]) == 1
+        llm_call_content = llm.generate.call_args.args[0].messages[0].content
+        assert "Abstract:" in llm_call_content
+
     async def test_retries_when_exact_entity_name_is_present(self):
         academic_tool = AsyncMock()
         academic_tool.name = "academic_search"

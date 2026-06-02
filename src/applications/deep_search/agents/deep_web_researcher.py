@@ -259,7 +259,7 @@ class DeepWebResearcherAgent(Agent):
             content = ""
             if crawl_result.success and crawl_result.output:
                 pages = crawl_result.output.get("pages", [])
-                content = "\n".join(p.get("content", "")[:3000] for p in pages[:3])
+                content = "\n".join(p.get("content", "")[:5000] for p in pages[:3])
             source_record["crawl_success"] = bool(crawl_result.success)
 
             if not content:
