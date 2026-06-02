@@ -1,5 +1,11 @@
 import { useCallback, useRef, useState } from "react";
 import type { ChatMode } from "../types";
+import {
+  CHAT_TEXTAREA_CLASS_NAME,
+  CHAT_TEXTAREA_MAX_HEIGHT,
+  CHAT_TEXTAREA_MIN_HEIGHT,
+  getAutoResizeHeight,
+} from "../lib/chatComposer";
 import { SendIcon, PlusIcon } from "./icons";
 import RAGModeToggle from "./RAGModeToggle";
 
@@ -7,7 +13,7 @@ interface ChatInputProps {
   disabled: boolean;
   chatMode: ChatMode;
   onChatModeChange: (mode: ChatMode) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string) => boolean;
 }
 
 export default function ChatInput({
@@ -22,19 +28,21 @@ export default function ChatInput({
   const autoResize = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
-    ta.style.height = "44px";
-    ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+    ta.style.height = `${CHAT_TEXTAREA_MIN_HEIGHT}px`;
+    ta.style.height = `${getAutoResizeHeight(
+      ta.scrollHeight,
+      CHAT_TEXTAREA_MIN_HEIGHT,
+      CHAT_TEXTAREA_MAX_HEIGHT,
+    )}px`;
     setCharCount(ta.value.length);
   }, []);
 
   const handleSend = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
-    const text = ta.value.trim();
-    if (!text || disabled) return;
-    onSend(text);
+    if (disabled || !onSend(ta.value)) return;
     ta.value = "";
-    ta.style.height = "44px";
+    ta.style.height = `${CHAT_TEXTAREA_MIN_HEIGHT}px`;
     setCharCount(0);
   }, [disabled, onSend]);
 
@@ -58,8 +66,13 @@ export default function ChatInput({
           <div className="px-4 pt-3 pb-2">
             <textarea
               ref={textareaRef}
-              className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/25 rounded-xl placeholder:text-[var(--text-muted)]"
-              style={{ color: "var(--text)", minHeight: 44, maxHeight: 200, fontFamily: "inherit" }}
+              className={CHAT_TEXTAREA_CLASS_NAME}
+              style={{
+                color: "var(--text)",
+                minHeight: CHAT_TEXTAREA_MIN_HEIGHT,
+                maxHeight: CHAT_TEXTAREA_MAX_HEIGHT,
+                fontFamily: "inherit",
+              }}
               placeholder={
                 chatMode === "rag"
                   ? "Ask about your documents..."

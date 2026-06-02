@@ -2,6 +2,12 @@ import { useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import type { ChatMode } from "../types";
 import {
+  WELCOME_TEXTAREA_CLASS_NAME,
+  WELCOME_TEXTAREA_MAX_HEIGHT,
+  WELCOME_TEXTAREA_MIN_HEIGHT,
+  getAutoResizeHeight,
+} from "../lib/chatComposer";
+import {
   SendIcon,
   PlusIcon,
   SettingsIcon,
@@ -19,7 +25,7 @@ import {
 import RAGModeToggle from "./RAGModeToggle";
 
 interface WelcomeScreenProps {
-  onSend: (text: string) => void;
+  onSend: (text: string) => boolean;
   chatMode: ChatMode;
   onChatModeChange: (mode: ChatMode) => void;
 }
@@ -44,9 +50,8 @@ export default function WelcomeScreen({ onSend, chatMode, onChatModeChange }: We
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = useCallback(() => {
-    const val = inputRef.current?.value.trim();
-    if (!val) return;
-    onSend(val);
+    const val = inputRef.current?.value;
+    if (!val || !onSend(val)) return;
     if (inputRef.current) inputRef.current.value = "";
   }, [onSend]);
 
@@ -89,16 +94,25 @@ export default function WelcomeScreen({ onSend, chatMode, onChatModeChange }: We
           <div className="px-4 pt-4 pb-2">
             <textarea
               ref={inputRef}
-              className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/25 rounded-xl placeholder:text-[var(--text-muted)]"
-              style={{ color: "var(--text)", minHeight: 60, maxHeight: 160, fontFamily: "inherit" }}
+              className={WELCOME_TEXTAREA_CLASS_NAME}
+              style={{
+                color: "var(--text)",
+                minHeight: WELCOME_TEXTAREA_MIN_HEIGHT,
+                maxHeight: WELCOME_TEXTAREA_MAX_HEIGHT,
+                fontFamily: "inherit",
+              }}
               placeholder={chatMode === "rag" ? "Ask about your documents..." : chatMode === "deep_search" ? "Ask a research question..." : "Ask anything..."}
               rows={2}
               onKeyDown={handleKeyDown}
               onInput={() => {
                 const ta = inputRef.current;
                 if (!ta) return;
-                ta.style.height = "60px";
-                ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
+                ta.style.height = `${WELCOME_TEXTAREA_MIN_HEIGHT}px`;
+                ta.style.height = `${getAutoResizeHeight(
+                  ta.scrollHeight,
+                  WELCOME_TEXTAREA_MIN_HEIGHT,
+                  WELCOME_TEXTAREA_MAX_HEIGHT,
+                )}px`;
               }}
               aria-label="Search query"
             />

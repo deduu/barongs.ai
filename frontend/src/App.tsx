@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import type { ChatMode, Source } from "./types";
 import { getString, setItem } from "./lib/storage";
+import { getConversationBootstrapAction } from "./lib/chatComposer";
 import { useTheme } from "./hooks/useTheme";
 import { useAuth } from "./hooks/useAuth";
+import { useConversationStore } from "./hooks/useConversationStore";
 import { useConversations } from "./hooks/useConversations";
 import { useProjects } from "./hooks/useProjects";
 import { useModels } from "./hooks/useModels";
@@ -56,19 +58,22 @@ export default function App() {
   // The effective bearer token: JWT when in jwt mode, API key otherwise
   const bearerToken = auth.mode === "jwt" ? auth.token : apiKey;
 
+  /* ── Conversation store (per-conversation messages & stream state) ─── */
+  const store = useConversationStore();
+
   /* ── Conversations ─────────────────────────────────────────── */
   const {
     conversations,
     currentConvId,
-    messages,
-    setMessages,
     newChat,
     loadConversation,
     deleteConversation,
     togglePin,
-    saveCurrentConversation,
+    saveConversation,
     assignProject,
-  } = useConversations(auth.user?.id ?? null);
+  } = useConversations(auth.user?.id ?? null, store);
+
+  const messages = store.getMessages(currentConvId);
 
   /* ── Projects ────────────────────────────────────────────── */
   const {
@@ -82,15 +87,18 @@ export default function App() {
 
   /* ── Auto-load first conversation or create new ────────────── */
   useEffect(() => {
-    if (currentConvId) return;
-    if (conversations.length) {
+    const action = getConversationBootstrapAction(
+      currentConvId,
+      conversations.length,
+    );
+    if (action === "load-first") {
       loadConversation(conversations[0].id);
-    } else {
+      return;
+    }
+    if (action === "new-chat") {
       newChat();
     }
-    // Only on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentConvId, conversations, loadConversation, newChat]);
 
   /* ── Models ────────────────────────────────────────────────── */
   const { models, selectedModel, setSelectedModel, refreshModels } =
@@ -121,9 +129,10 @@ export default function App() {
     currentConvId,
     chatMode,
     searchSettings,
-    setMessages,
-    onComplete: saveCurrentConversation,
+    store,
+    onComplete: saveConversation,
   });
+  const streamingConvIds = store.getStreamingConvIds();
   const [streamNow, setStreamNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -140,7 +149,6 @@ export default function App() {
     ? Math.max(0, Math.floor((streamNow - lastEventAt) / 1000))
     : 0;
   const streamIsStale = isStreaming && streamLastUpdateSeconds >= 12;
-  const conversationLockReason = "Finish or stop the current run before starting or switching chats.";
 
   /* ── RAG document management ────────────────────────────────── */
   const rag = useRAG({ apiKey: bearerToken });
@@ -206,7 +214,6 @@ export default function App() {
   /* ── Keyboard shortcuts ──────────────────────────────────── */
   useKeyboardShortcuts({
     onNewChat: () => {
-      if (isStreaming) return;
       newChat(activeProjectId);
       setActivePage("chat");
       if (isMobile) setSidebarOpen(false);
@@ -220,7 +227,7 @@ export default function App() {
   /* ── Quick send (welcome chips) ──────────────────────────── */
   const handleQuickSend = useCallback(
     (text: string) => {
-      send(text);
+      return send(text);
     },
     [send],
   );
@@ -267,16 +274,13 @@ export default function App() {
         activePage={activePage}
         projects={projects}
         activeProjectId={activeProjectId}
-        isConversationLocked={isStreaming}
-        conversationLockReason={conversationLockReason}
+        streamingConvIds={streamingConvIds}
         onNewChat={() => {
-          if (isStreaming) return;
           newChat(activeProjectId);
           setActivePage("chat");
           if (isMobile) setSidebarOpen(false);
         }}
         onLoadConversation={(id) => {
-          if (isStreaming) return;
           loadConversation(id);
           setActivePage("chat");
           if (isMobile) setSidebarOpen(false);

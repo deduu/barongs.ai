@@ -28,8 +28,7 @@ interface SidebarProps {
   activePage: ActivePage;
   projects: Project[];
   activeProjectId: string | null;
-  isConversationLocked?: boolean;
-  conversationLockReason?: string;
+  streamingConvIds?: string[];
   onNewChat: () => void;
   onLoadConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
@@ -179,8 +178,7 @@ export default function Sidebar({
   activePage,
   projects,
   activeProjectId,
-  isConversationLocked = false,
-  conversationLockReason = "Finish the current run before starting or switching chats.",
+  streamingConvIds = [],
   onNewChat,
   onLoadConversation,
   onDeleteConversation,
@@ -213,11 +211,9 @@ export default function Sidebar({
 
   const groups = useMemo(() => groupConversations(filtered), [filtered]);
 
+  const streamingSet = useMemo(() => new Set(streamingConvIds), [streamingConvIds]);
   const sidebarWidth = collapsed && !isMobile ? "var(--sidebar-rail)" : "var(--sidebar-w)";
   const isExpanded = !collapsed || isMobile;
-  const newChatTitle = isConversationLocked
-    ? conversationLockReason
-    : "New chat (Ctrl+K)";
 
   return (
     <>
@@ -292,24 +288,15 @@ export default function Sidebar({
         {/* New chat button — outlined style */}
         <div className="px-2.5 pt-3">
           <button
-            className="flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all hover:bg-[var(--surface-2)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all hover:bg-[var(--surface-2)] active:scale-[0.98]"
             style={{ borderColor: "var(--border)", color: "var(--text)" }}
             onClick={onNewChat}
-            title={newChatTitle}
+            title="New chat (Ctrl+K)"
             aria-label="New chat"
-            disabled={isConversationLocked}
           >
             <PlusIcon size={16} />
             {isExpanded && <span>New chat</span>}
           </button>
-          {isExpanded && isConversationLocked && (
-            <p
-              className="px-1.5 pt-2 text-[11px] leading-relaxed"
-              style={{ color: "var(--text-muted)" }}
-            >
-              {conversationLockReason}
-            </p>
-          )}
         </div>
 
         {/* Nav links */}
@@ -468,6 +455,7 @@ export default function Sidebar({
                 )}
                 {group.conversations.map((conv) => {
                   const isActive = conv.id === currentConvId;
+                  const isConvStreaming = streamingSet.has(conv.id);
                   return (
                     <div
                       key={conv.id}
@@ -475,22 +463,16 @@ export default function Sidebar({
                       style={{
                         color: isActive ? "var(--text)" : "var(--text-secondary)",
                         background: isActive ? "var(--accent-dim)" : undefined,
-                        cursor: isConversationLocked ? "not-allowed" : "pointer",
-                        opacity: isConversationLocked && !isActive ? 0.6 : 1,
+                        cursor: "pointer",
                       }}
-                      onClick={() => {
-                        if (isConversationLocked) return;
-                        onLoadConversation(conv.id);
-                      }}
+                      onClick={() => onLoadConversation(conv.id)}
                       role="button"
-                      tabIndex={isConversationLocked ? -1 : 0}
+                      tabIndex={0}
                       onKeyDown={(e) => {
-                        if (isConversationLocked) return;
                         if (e.key === "Enter") onLoadConversation(conv.id);
                       }}
                       aria-current={isActive ? "true" : undefined}
-                      aria-disabled={isConversationLocked}
-                      title={isConversationLocked ? conversationLockReason : conv.title}
+                      title={conv.title}
                     >
                       <MessageIcon
                         size={14}
@@ -501,10 +483,17 @@ export default function Sidebar({
                           <span className="flex-1 truncate">
                             {conv.title || "Untitled"}
                           </span>
+                          {isConvStreaming && (
+                            <span
+                              className="h-2 w-2 flex-shrink-0 rounded-full animate-pulse"
+                              style={{ background: "#22c55e" }}
+                              title="Streaming in progress"
+                            />
+                          )}
                           <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                             {projects.length > 0 && (
                               <select
-                                className="h-6 w-6 cursor-pointer appearance-none rounded bg-transparent text-center transition-colors hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-45"
+                                className="h-6 w-6 cursor-pointer appearance-none rounded bg-transparent text-center transition-colors hover:bg-[var(--surface-2)]"
                                 style={{ color: "var(--text-muted)", fontSize: "10px" }}
                                 value={conv.projectId ?? ""}
                                 onClick={(e) => e.stopPropagation()}
@@ -514,7 +503,6 @@ export default function Sidebar({
                                 }}
                                 title="Move to project"
                                 aria-label="Move to project"
-                                disabled={isConversationLocked}
                               >
                                 <option value="">No project</option>
                                 {projects.map((p) => (
@@ -523,7 +511,7 @@ export default function Sidebar({
                               </select>
                             )}
                             <button
-                              className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-45"
+                              className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-[var(--surface-2)]"
                               style={{ color: conv.pinned ? "var(--accent)" : "var(--text-muted)" }}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -531,7 +519,6 @@ export default function Sidebar({
                               }}
                               title={conv.pinned ? "Unpin" : "Pin"}
                               aria-label={conv.pinned ? "Unpin conversation" : "Pin conversation"}
-                              disabled={isConversationLocked}
                             >
                               <PinIcon size={12} />
                             </button>
@@ -544,7 +531,7 @@ export default function Sidebar({
                               }}
                               title="Delete"
                               aria-label="Delete conversation"
-                              disabled={isConversationLocked}
+                              disabled={isConvStreaming}
                             >
                               <TrashIcon size={12} />
                             </button>
